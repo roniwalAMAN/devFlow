@@ -1,0 +1,16 @@
+{
+  "name": "@devflow/shared",
+  "version": "1.0.0",
+  "description": "Shared utilities and types for DevFlow",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3"
+  }
+}

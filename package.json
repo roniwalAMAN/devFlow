@@ -1,0 +1,23 @@
+{
+  "name": "devflow",
+  "version": "1.0.0",
+  "description": "DevFlow monorepo",
+  "private": true,
+  "pnpm": {
+    "workspaces": [
+      "apps/*",
+      "packages/*"
+    ]
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm -r build",
+    "start": "pnpm -r start"
+  },
+  "devDependencies": {
+    "prisma": "5.22.0"
+  },
+  "dependencies": {
+    "@prisma/client": "5.22.0"
+  }
+}

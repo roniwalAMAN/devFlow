@@ -1,0 +1,67 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String                  @id @default(cuid())
+  name          String
+  email         String                  @unique
+  passwordHash  String
+  avatar        String?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  // Relations
+  organizationMembers OrganizationMember[]
+  ownedOrganizations  Organization[]      @relation("owner")
+
+  @@index([email])
+}
+
+model Organization {
+  id              String                 @id @default(cuid())
+  name            String
+  slug            String                 @unique
+  ownerId         String
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  // Relations
+  owner           User                   @relation("owner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members         OrganizationMember[]
+
+  @@index([ownerId])
+  @@index([slug])
+}
+
+model OrganizationMember {
+  id              String                 @id @default(cuid())
+  userId          String
+  organizationId  String
+  role            MemberRole             @default(DEVELOPER)
+  createdAt       DateTime               @default(now())
+
+  // Relations
+  user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Prevent duplicate memberships
+  @@unique([userId, organizationId])
+  @@index([userId])
+  @@index([organizationId])
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  DEVELOPER
+  VIEWER
+}

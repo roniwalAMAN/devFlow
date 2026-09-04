@@ -132,3 +132,32 @@ export async function login(req: Request, res: Response): Promise<void> {
     });
   }
 }
+
+/**
+ * GET /api/auth/me
+ * Return authenticated user info from verified JWT payload
+ */
+export async function getMe(req: Request, res: Response): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        message: 'Unauthorized',
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        user: req.user,
+      },
+    });
+  } catch (error) {
+    console.error('Get me error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred while retrieving user information',
+    });
+  }
+}

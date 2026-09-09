@@ -101,3 +101,23 @@ export function validateLoginInput(data: {
 
   return errors;
 }
+
+/**
+ * Validate refresh token request
+ */
+export function validateRefreshTokenInput(data: {
+  refreshToken?: unknown;
+}): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  // Validate refreshToken
+  if (!data.refreshToken || typeof data.refreshToken !== 'string' || data.refreshToken.trim() === '') {
+    errors.push({
+      field: 'refreshToken',
+      message: 'Refresh token is required',
+    });
+  }
+
+  return errors;
+}
+

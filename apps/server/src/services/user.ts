@@ -61,3 +61,44 @@ export function formatUserResponse(user: User) {
   const { passwordHash: _, ...safeUser } = user;
   return safeUser;
 }
+
+/**
+ * Store a new refresh token in the database
+ */
+export async function createRefreshTokenRecord(
+  userId: string,
+  token: string,
+  expiresAt: Date
+) {
+  return prisma.refreshToken.create({
+    data: {
+      userId,
+      token,
+      expiresAt,
+    },
+  });
+}
+
+/**
+ * Find a refresh token with its associated user
+ */
+export async function findRefreshTokenWithUser(token: string) {
+  return prisma.refreshToken.findUnique({
+    where: { token },
+    include: {
+      user: true,
+    },
+  });
+}
+
+/**
+ * Revoke (delete) a refresh token from the database
+ */
+export async function revokeRefreshToken(token: string): Promise<void> {
+  await prisma.refreshToken.deleteMany({
+    where: { token },
+  });
+}
+
+
+

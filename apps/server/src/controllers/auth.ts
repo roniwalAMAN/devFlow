@@ -7,14 +7,22 @@ import type { Request, Response } from 'express';
 import {
   validateRegistrationInput,
   validateLoginInput,
+  validateRefreshTokenInput,
 } from '../utils/validation';
 import {
   createUser,
   findUserByEmail,
   comparePassword,
   formatUserResponse,
+  createRefreshTokenRecord,
+  findRefreshTokenWithUser,
+  revokeRefreshToken,
 } from '../services/user';
-import { generateToken } from '../utils/jwt';
+import {
+  generateToken,
+  generateRefreshToken,
+  getRefreshTokenExpiry,
+} from '../utils/jwt';
 
 /**
  * POST /api/auth/register
@@ -69,7 +77,7 @@ export async function register(req: Request, res: Response): Promise<void> {
 
 /**
  * POST /api/auth/login
- * Authenticate user and return JWT token with safe user information
+ * Authenticate user and return access & refresh tokens with safe user information
  */
 export async function login(req: Request, res: Response): Promise<void> {
   try {
@@ -109,18 +117,26 @@ export async function login(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    // Generate JWT token with minimum required user information
-    const token = generateToken({
+    // Generate short-lived access token
+    const accessToken = generateToken({
       userId: user.id,
       email: user.email,
     });
 
-    // Return safe user info (never passwordHash) and JWT token
+    // Generate long-lived refresh token
+    const refreshToken = generateRefreshToken();
+    const expiresAt = getRefreshTokenExpiry();
+
+    // Store refresh token in database
+    await createRefreshTokenRecord(user.id, refreshToken, expiresAt);
+
+    // Return safe user info (never passwordHash) and both tokens
     res.status(200).json({
       success: true,
       message: 'Login successful',
       data: {
-        token,
+        accessToken,
+        refreshToken,
         user: formatUserResponse(user),
       },
     });
@@ -129,6 +145,94 @@ export async function login(req: Request, res: Response): Promise<void> {
     res.status(500).json({
       success: false,
       message: 'An error occurred during login',
+    });
+  }
+}
+
+/**
+ * POST /api/auth/refresh
+ * Refresh access token using a valid, unexpired refresh token
+ */
+export async function refresh(req: Request, res: Response): Promise<void> {
+  try {
+    const { refreshToken } = req.body;
+
+    // Validate input
+    const validationErrors = validateRefreshTokenInput({ refreshToken });
+    if (validationErrors.length > 0) {
+      res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: validationErrors,
+      });
+      return;
+    }
+
+    // Find refresh token in database
+    const tokenRecord = await findRefreshTokenWithUser(refreshToken as string);
+
+    // Check if token exists and has not expired
+    if (!tokenRecord || !tokenRecord.user || new Date() > tokenRecord.expiresAt) {
+      res.status(401).json({
+        success: false,
+        message: 'Invalid or expired refresh token',
+      });
+      return;
+    }
+
+    // Generate new short-lived access token
+    const accessToken = generateToken({
+      userId: tokenRecord.user.id,
+      email: tokenRecord.user.email,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Token refreshed successfully',
+      data: {
+        accessToken,
+      },
+    });
+  } catch (error) {
+    console.error('Refresh token error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred during token refresh',
+    });
+  }
+}
+
+/**
+ * POST /api/auth/logout
+ * Revoke refresh token by deleting it from the database
+ */
+export async function logout(req: Request, res: Response): Promise<void> {
+  try {
+    const { refreshToken } = req.body;
+
+    // Validate input
+    const validationErrors = validateRefreshTokenInput({ refreshToken });
+    if (validationErrors.length > 0) {
+      res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: validationErrors,
+      });
+      return;
+    }
+
+    // Revoke refresh token from database
+    await revokeRefreshToken(refreshToken as string);
+
+    res.status(200).json({
+      success: true,
+      message: 'Logged out successfully',
+    });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred during logout',
     });
   }
 }

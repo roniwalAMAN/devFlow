@@ -22,8 +22,23 @@ model User {
   // Relations
   organizationMembers OrganizationMember[]
   ownedOrganizations  Organization[]      @relation("owner")
+  refreshTokens       RefreshToken[]
 
   @@index([email])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
 }
 
 model Organization {

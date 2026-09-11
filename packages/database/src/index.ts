@@ -1,6 +1,6 @@
 // Database layer will be added here
-export { PrismaClient } from '@prisma/client';
-export type { User, Organization, OrganizationMember, MemberRole, RefreshToken } from '@prisma/client';
+export { PrismaClient, MemberRole } from '@prisma/client';
+export type { User, Organization, OrganizationMember, RefreshToken } from '@prisma/client';
 
 // Export a singleton instance
 import { PrismaClient } from '@prisma/client';

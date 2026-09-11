@@ -10,6 +10,7 @@ dotenv.config({ path: path.resolve(process.cwd(), '../../.env.local'), override:
 import express from 'express';
 import { checkDatabaseConnection } from './services/db';
 import authRoutes from './routes/auth';
+import organizationRoutes from './routes/organization';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -19,6 +20,7 @@ app.use(express.json());
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/organizations', organizationRoutes);
 
 // Health check endpoint - API only
 app.get('/api/health', (_req, res) => {

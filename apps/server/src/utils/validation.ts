@@ -121,3 +121,28 @@ export function validateRefreshTokenInput(data: {
   return errors;
 }
 
+/**
+ * Validate create organization request
+ */
+export function validateCreateOrganizationInput(data: {
+  name?: unknown;
+}): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  // Validate name
+  if (!data.name || typeof data.name !== 'string' || data.name.trim() === '') {
+    errors.push({
+      field: 'name',
+      message: 'Organization name is required and must be a non-empty string',
+    });
+  } else if (data.name.trim().length > 100) {
+    errors.push({
+      field: 'name',
+      message: 'Organization name must not exceed 100 characters',
+    });
+  }
+
+  return errors;
+}
+
+

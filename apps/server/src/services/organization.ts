@@ -67,5 +67,197 @@ export function formatOrganizationResponse(organization: Organization) {
     slug: organization.slug,
     ownerId: organization.ownerId,
     createdAt: organization.createdAt,
+    updatedAt: organization.updatedAt,
   };
 }
+
+/**
+ * Get all organizations where the specified user is a member
+ * Returns safe organization fields and safe owner details
+ */
+export async function getUserOrganizations(userId: string) {
+  return prisma.organization.findMany({
+    where: {
+      members: {
+        some: {
+          userId,
+        },
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      ownerId: true,
+      createdAt: true,
+      updatedAt: true,
+      owner: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          avatar: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+}
+
+/**
+ * Get organization details by ID including owner and members with safe fields
+ */
+export async function getOrganizationDetails(organizationId: string) {
+  return prisma.organization.findUnique({
+    where: {
+      id: organizationId,
+    },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      ownerId: true,
+      createdAt: true,
+      updatedAt: true,
+      owner: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          avatar: true,
+        },
+      },
+      members: {
+        select: {
+          id: true,
+          role: true,
+          createdAt: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              avatar: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'asc',
+        },
+      },
+    },
+  });
+}
+
+/**
+ * Find organization by ID
+ */
+export async function findOrganizationById(organizationId: string) {
+  return prisma.organization.findUnique({
+    where: {
+      id: organizationId,
+    },
+  });
+}
+
+/**
+ * Get organization membership for a specific user
+ */
+export async function getOrganizationMember(
+  organizationId: string,
+  userId: string
+) {
+  return prisma.organizationMember.findUnique({
+    where: {
+      userId_organizationId: {
+        userId,
+        organizationId,
+      },
+    },
+  });
+}
+
+/**
+ * Add a member to an organization
+ * Returns safe member info including user details
+ */
+export async function addOrganizationMember(data: {
+  organizationId: string;
+  userId: string;
+  role: MemberRole;
+}) {
+  return prisma.organizationMember.create({
+    data: {
+      organizationId: data.organizationId,
+      userId: data.userId,
+      role: data.role,
+    },
+    select: {
+      id: true,
+      role: true,
+      createdAt: true,
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          avatar: true,
+        },
+      },
+    },
+  });
+}
+
+/**
+ * Remove a member from an organization
+ */
+export async function removeOrganizationMember(
+  organizationId: string,
+  userId: string
+) {
+  return prisma.organizationMember.delete({
+    where: {
+      userId_organizationId: {
+        userId,
+        organizationId,
+      },
+    },
+  });
+}
+
+/**
+ * Update the role of an organization member
+ * Returns safe member info including user details
+ */
+export async function updateOrganizationMemberRole(
+  organizationId: string,
+  userId: string,
+  role: MemberRole
+) {
+  return prisma.organizationMember.update({
+    where: {
+      userId_organizationId: {
+        userId,
+        organizationId,
+      },
+    },
+    data: {
+      role,
+    },
+    select: {
+      id: true,
+      role: true,
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          avatar: true,
+        },
+      },
+    },
+  });
+}
+

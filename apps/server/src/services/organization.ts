@@ -261,3 +261,108 @@ export async function updateOrganizationMemberRole(
   });
 }
 
+/**
+ * Find a pending organization invite by organizationId and email
+ * An invite is pending if acceptedAt is null and expiresAt is in the future
+ */
+export async function findPendingInvite(
+  organizationId: string,
+  email: string
+) {
+  return prisma.organizationInvite.findFirst({
+    where: {
+      organizationId,
+      email,
+      acceptedAt: null,
+      expiresAt: {
+        gt: new Date(),
+      },
+    },
+  });
+}
+
+/**
+ * Create a new organization invite
+ */
+export async function createOrganizationInvite(data: {
+  organizationId: string;
+  email: string;
+  role: MemberRole;
+  token: string;
+  expiresAt: Date;
+}) {
+  return prisma.organizationInvite.create({
+    data: {
+      organizationId: data.organizationId,
+      email: data.email,
+      role: data.role,
+      token: data.token,
+      expiresAt: data.expiresAt,
+    },
+    select: {
+      id: true,
+      organizationId: true,
+      email: true,
+      role: true,
+      token: true,
+      expiresAt: true,
+      createdAt: true,
+      acceptedAt: true,
+    },
+  });
+}
+
+/**
+ * List pending organization invites for an organization
+ * Pending invites: acceptedAt is null and expiresAt > current time
+ * Tokens and sensitive fields are excluded
+ */
+export async function listPendingInvites(organizationId: string) {
+  return prisma.organizationInvite.findMany({
+    where: {
+      organizationId,
+      acceptedAt: null,
+      expiresAt: {
+        gt: new Date(),
+      },
+    },
+    select: {
+      id: true,
+      organizationId: true,
+      email: true,
+      role: true,
+      expiresAt: true,
+      createdAt: true,
+      acceptedAt: true,
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+}
+
+/**
+ * Find an organization invite by ID
+ */
+export async function findInviteById(inviteId: string) {
+  return prisma.organizationInvite.findUnique({
+    where: {
+      id: inviteId,
+    },
+  });
+}
+
+/**
+ * Delete an organization invite by ID
+ */
+export async function deleteOrganizationInvite(inviteId: string) {
+  return prisma.organizationInvite.delete({
+    where: {
+      id: inviteId,
+    },
+  });
+}
+
+
+
+

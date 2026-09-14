@@ -208,4 +208,44 @@ export function validateUpdateMemberRoleInput(data: {
   return errors;
 }
 
+/**
+ * Validate create organization invite request
+ */
+export function validateCreateInviteInput(data: {
+  email?: unknown;
+  role?: unknown;
+}): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  // Validate email
+  if (!data.email || typeof data.email !== 'string' || data.email.trim() === '') {
+    errors.push({
+      field: 'email',
+      message: 'Email is required and must be a non-empty string',
+    });
+  } else if (!isValidEmail(data.email.trim())) {
+    errors.push({
+      field: 'email',
+      message: 'Email must be a valid email address',
+    });
+  }
+
+  // Validate role
+  const validRoles = ['OWNER', 'ADMIN', 'DEVELOPER', 'VIEWER'];
+  if (!data.role || typeof data.role !== 'string' || data.role.trim() === '') {
+    errors.push({
+      field: 'role',
+      message: 'Role is required',
+    });
+  } else if (!validRoles.includes(data.role.trim().toUpperCase())) {
+    errors.push({
+      field: 'role',
+      message: `Role must be one of: ${validRoles.join(', ')}`,
+    });
+  }
+
+  return errors;
+}
+
+
 

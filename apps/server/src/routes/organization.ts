@@ -10,6 +10,9 @@ import {
   addOrganizationMemberHandler,
   removeOrganizationMemberHandler,
   updateMemberRoleHandler,
+  createOrganizationInviteHandler,
+  listOrganizationInvitesHandler,
+  revokeOrganizationInviteHandler,
 } from '../controllers/organization';
 import { authenticate } from '../middleware/auth';
 import { requireOrganizationRole } from '../middleware/rbac';
@@ -46,6 +49,30 @@ router.patch(
   authenticate,
   requireOrganizationRole('OWNER', 'ADMIN'),
   updateMemberRoleHandler
+);
+
+// POST /api/organizations/:organizationId/invites (Protected route)
+router.post(
+  '/:organizationId/invites',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN'),
+  createOrganizationInviteHandler
+);
+
+// GET /api/organizations/:organizationId/invites (Protected route)
+router.get(
+  '/:organizationId/invites',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN'),
+  listOrganizationInvitesHandler
+);
+
+// DELETE /api/organizations/:organizationId/invites/:inviteId (Protected route)
+router.delete(
+  '/:organizationId/invites/:inviteId',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN'),
+  revokeOrganizationInviteHandler
 );
 
 export default router;

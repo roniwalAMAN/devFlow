@@ -52,6 +52,7 @@ model Organization {
   // Relations
   owner           User                   @relation("owner", fields: [ownerId], references: [id], onDelete: Cascade)
   members         OrganizationMember[]
+  invites         OrganizationInvite[]
 
   @@index([ownerId])
   @@index([slug])
@@ -72,6 +73,23 @@ model OrganizationMember {
   @@unique([userId, organizationId])
   @@index([userId])
   @@index([organizationId])
+}
+
+model OrganizationInvite {
+  id              String                 @id @default(cuid())
+  organizationId  String
+  email           String
+  role            MemberRole             @default(DEVELOPER)
+  token           String                 @unique
+  expiresAt       DateTime
+  createdAt       DateTime               @default(now())
+  acceptedAt      DateTime?
+
+  // Relations
+  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([email])
 }
 
 enum MemberRole {

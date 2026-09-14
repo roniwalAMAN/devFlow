@@ -1,9 +1,11 @@
-// Database layer will be added here
-export { PrismaClient, MemberRole } from '@prisma/client';
-export type { User, Organization, OrganizationMember, RefreshToken } from '@prisma/client';
+import { PrismaClient, MemberRole } from '@prisma/client';
+
+export { PrismaClient, MemberRole };
+export type { User, Organization, OrganizationMember, RefreshToken, OrganizationInvite } from '@prisma/client';
+export type OrganizationRole = MemberRole;
+export const OrganizationRole = MemberRole;
 
 // Export a singleton instance
-import { PrismaClient } from '@prisma/client';
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 

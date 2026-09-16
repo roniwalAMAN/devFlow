@@ -55,6 +55,15 @@ export async function findUserByEmail(email: string): Promise<User | null> {
 }
 
 /**
+ * Find user by ID
+ */
+export async function findUserById(id: string): Promise<User | null> {
+  return prisma.user.findUnique({
+    where: { id },
+  });
+}
+
+/**
  * Format user response (exclude passwordHash)
  */
 export function formatUserResponse(user: User) {

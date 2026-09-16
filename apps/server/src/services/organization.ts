@@ -180,6 +180,27 @@ export async function getOrganizationMember(
 }
 
 /**
+ * Find an organization member by user email
+ */
+export async function getOrganizationMemberByEmail(
+  organizationId: string,
+  email: string
+) {
+  const normalizedEmail = email.trim().toLowerCase();
+  return prisma.organizationMember.findFirst({
+    where: {
+      organizationId,
+      user: {
+        email: {
+          equals: normalizedEmail,
+          mode: 'insensitive',
+        },
+      },
+    },
+  });
+}
+
+/**
  * Add a member to an organization
  * Returns safe member info including user details
  */
@@ -269,10 +290,14 @@ export async function findPendingInvite(
   organizationId: string,
   email: string
 ) {
+  const normalizedEmail = email.trim().toLowerCase();
   return prisma.organizationInvite.findFirst({
     where: {
       organizationId,
-      email,
+      email: {
+        equals: normalizedEmail,
+        mode: 'insensitive',
+      },
       acceptedAt: null,
       expiresAt: {
         gt: new Date(),
@@ -294,7 +319,7 @@ export async function createOrganizationInvite(data: {
   return prisma.organizationInvite.create({
     data: {
       organizationId: data.organizationId,
-      email: data.email,
+      email: data.email.trim().toLowerCase(),
       role: data.role,
       token: data.token,
       expiresAt: data.expiresAt,
@@ -353,15 +378,164 @@ export async function findInviteById(inviteId: string) {
 }
 
 /**
- * Delete an organization invite by ID
+ * Find an organization invite by token
  */
-export async function deleteOrganizationInvite(inviteId: string) {
-  return prisma.organizationInvite.delete({
+export async function findInviteByToken(token: string) {
+  return prisma.organizationInvite.findUnique({
     where: {
-      id: inviteId,
+      token,
     },
   });
 }
+
+/**
+ * Accept an organization invite atomically inside a transaction
+ */
+export async function acceptOrganizationInvite(
+  inviteId: string,
+  userId: string,
+  _organizationId: string,
+  _role: MemberRole
+) {
+  return prisma.$transaction(async (tx) => {
+    // 1. Re-verify invite inside transaction
+    const invite = await tx.organizationInvite.findUnique({
+      where: { id: inviteId },
+    });
+
+    if (!invite) {
+      throw new Error('INVITE_NOT_FOUND');
+    }
+
+    if (invite.acceptedAt !== null) {
+      throw new Error('INVITE_ALREADY_ACCEPTED');
+    }
+
+    if (new Date(invite.expiresAt) <= new Date()) {
+      throw new Error('INVITE_EXPIRED');
+    }
+
+    // 2. Re-verify user existence and email match inside transaction
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new Error('USER_NOT_FOUND');
+    }
+
+    if (user.email.trim().toLowerCase() !== invite.email.trim().toLowerCase()) {
+      throw new Error('EMAIL_MISMATCH');
+    }
+
+    // 3. Re-verify membership does not already exist
+    const existingMember = await tx.organizationMember.findUnique({
+      where: {
+        userId_organizationId: {
+          userId,
+          organizationId: invite.organizationId,
+        },
+      },
+    });
+
+    if (existingMember) {
+      throw new Error('ALREADY_MEMBER');
+    }
+
+    // 4. Create OrganizationMember
+    await tx.organizationMember.create({
+      data: {
+        userId,
+        organizationId: invite.organizationId,
+        role: invite.role,
+      },
+    });
+
+    // 5. Update invite acceptedAt
+    await tx.organizationInvite.update({
+      where: { id: invite.id },
+      data: {
+        acceptedAt: new Date(),
+      },
+    });
+
+    return {
+      organizationId: invite.organizationId,
+      role: invite.role,
+    };
+  });
+}
+
+/**
+ * Resend an organization invite by updating its token and expiresAt
+ */
+export async function resendOrganizationInvite(
+  inviteId: string,
+  token: string,
+  expiresAt: Date
+) {
+  return prisma.$transaction(async (tx) => {
+    const invite = await tx.organizationInvite.findUnique({
+      where: { id: inviteId },
+    });
+
+    if (!invite) {
+      throw new Error('INVITE_NOT_FOUND');
+    }
+
+    if (invite.acceptedAt !== null) {
+      throw new Error('INVITE_ALREADY_ACCEPTED');
+    }
+
+    return tx.organizationInvite.update({
+      where: {
+        id: inviteId,
+      },
+      data: {
+        token,
+        expiresAt,
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        email: true,
+        role: true,
+        token: true,
+        expiresAt: true,
+        createdAt: true,
+        acceptedAt: true,
+      },
+    });
+  });
+}
+
+/**
+ * Delete an organization invite by ID
+ */
+export async function deleteOrganizationInvite(inviteId: string) {
+  return prisma.$transaction(async (tx) => {
+    const invite = await tx.organizationInvite.findUnique({
+      where: { id: inviteId },
+    });
+
+    if (!invite) {
+      throw new Error('INVITE_NOT_FOUND');
+    }
+
+    if (invite.acceptedAt !== null) {
+      throw new Error('INVITE_ALREADY_ACCEPTED');
+    }
+
+    return tx.organizationInvite.delete({
+      where: {
+        id: inviteId,
+      },
+    });
+  });
+}
+
+
+
 
 
 

@@ -1,7 +1,7 @@
 import { PrismaClient, MemberRole } from '@prisma/client';
 
 export { PrismaClient, MemberRole };
-export type { User, Organization, OrganizationMember, RefreshToken, OrganizationInvite } from '@prisma/client';
+export type { User, Organization, OrganizationMember, RefreshToken, OrganizationInvite, Project } from '@prisma/client';
 export type OrganizationRole = MemberRole;
 export const OrganizationRole = MemberRole;
 

@@ -13,7 +13,9 @@ import {
   createOrganizationInviteHandler,
   listOrganizationInvitesHandler,
   revokeOrganizationInviteHandler,
+  resendOrganizationInviteHandler,
 } from '../controllers/organization';
+import { createProjectHandler } from '../controllers/project';
 import { authenticate } from '../middleware/auth';
 import { requireOrganizationRole } from '../middleware/rbac';
 
@@ -75,4 +77,22 @@ router.delete(
   revokeOrganizationInviteHandler
 );
 
+// POST /api/organizations/:organizationId/invites/:inviteId/resend (Protected route)
+router.post(
+  '/:organizationId/invites/:inviteId/resend',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN'),
+  resendOrganizationInviteHandler
+);
+
+// POST /api/organizations/:organizationId/projects (Protected route)
+router.post(
+  '/:organizationId/projects',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN', 'DEVELOPER'),
+  createProjectHandler
+);
+
 export default router;
+
+

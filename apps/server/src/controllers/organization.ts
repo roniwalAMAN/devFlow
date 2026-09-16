@@ -19,6 +19,7 @@ import {
   getOrganizationDetails,
   findOrganizationById,
   getOrganizationMember,
+  getOrganizationMemberByEmail,
   addOrganizationMember,
   removeOrganizationMember,
   updateOrganizationMemberRole,
@@ -27,6 +28,7 @@ import {
   listPendingInvites,
   findInviteById,
   deleteOrganizationInvite,
+  resendOrganizationInvite,
 } from '../services/organization';
 import { findUserByEmail } from '../services/user';
 
@@ -699,24 +701,17 @@ export async function createOrganizationInviteHandler(
     }
 
     // 7. Check if the email belongs to a user who is already a member of this organization
-    let existingUser = await findUserByEmail(normalizedEmail);
-    if (!existingUser) {
-      existingUser = await findUserByEmail((email as string).trim());
-    }
+    const existingMemberWithEmail = await getOrganizationMemberByEmail(
+      organizationId,
+      normalizedEmail
+    );
 
-    if (existingUser) {
-      const existingMembership = await getOrganizationMember(
-        organizationId,
-        existingUser.id
-      );
-
-      if (existingMembership) {
-        res.status(409).json({
-          success: false,
-          message: 'User with this email is already a member of this organization',
-        });
-        return;
-      }
+    if (existingMemberWithEmail) {
+      res.status(409).json({
+        success: false,
+        message: 'User with this email is already a member of this organization',
+      });
+      return;
     }
 
     // 8. Check if a pending invite already exists for this email in this organization
@@ -936,12 +931,156 @@ export async function revokeOrganizationInviteHandler(
     });
   } catch (error) {
     console.error('Revoke organization invite error:', error);
+    if (error instanceof Error) {
+      if (error.message === 'INVITE_NOT_FOUND') {
+        res.status(404).json({
+          success: false,
+          message: 'Invitation not found',
+        });
+        return;
+      }
+      if (error.message === 'INVITE_ALREADY_ACCEPTED') {
+        res.status(409).json({
+          success: false,
+          message: 'Cannot revoke an already accepted invitation',
+        });
+        return;
+      }
+    }
     res.status(500).json({
       success: false,
       message: 'An error occurred while revoking the organization invite',
     });
   }
 }
+
+/**
+ * POST /api/organizations/:organizationId/invites/:inviteId/resend
+ * Resend an organization invitation by updating the token and expiration
+ */
+export async function resendOrganizationInviteHandler(
+  req: Request,
+  res: Response
+): Promise<void> {
+  try {
+    // 1. Verify user is authenticated
+    if (!req.user || !req.user.userId) {
+      res.status(401).json({
+        success: false,
+        message: 'Unauthorized',
+      });
+      return;
+    }
+
+    const { organizationId, inviteId } = req.params;
+
+    if (!organizationId || !inviteId) {
+      res.status(400).json({
+        success: false,
+        message: 'Organization ID and Invite ID are required',
+      });
+      return;
+    }
+
+    // 2. Verify organization exists
+    const organization = await findOrganizationById(organizationId);
+    if (!organization) {
+      res.status(404).json({
+        success: false,
+        message: 'Organization not found',
+      });
+      return;
+    }
+
+    // 3. Verify requester is a member of the organization
+    const requesterMembership = await getOrganizationMember(
+      organizationId,
+      req.user.userId
+    );
+
+    if (!requesterMembership) {
+      res.status(403).json({
+        success: false,
+        message: 'Forbidden. You are not a member of this organization',
+      });
+      return;
+    }
+
+    // 4. Only OWNER and ADMIN can resend invites
+    if (
+      requesterMembership.role !== MemberRole.OWNER &&
+      requesterMembership.role !== MemberRole.ADMIN
+    ) {
+      res.status(403).json({
+        success: false,
+        message: 'Forbidden. Only organization owners and admins can resend invites',
+      });
+      return;
+    }
+
+    // 5. Find invite and verify it belongs to this organization
+    const invite = await findInviteById(inviteId);
+    if (!invite || invite.organizationId !== organizationId) {
+      res.status(404).json({
+        success: false,
+        message: 'Invitation not found',
+      });
+      return;
+    }
+
+    // 6. Only pending invites can be resent (acceptedAt must be null)
+    if (invite.acceptedAt !== null) {
+      res.status(409).json({
+        success: false,
+        message: 'Cannot resend an already accepted invitation',
+      });
+      return;
+    }
+
+    // 7. Generate a new cryptographically secure random token using crypto
+    const newToken = crypto.randomBytes(32).toString('hex');
+
+    // 8. Set expiresAt to 7 days from the current time
+    const newExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    // 9. Update the existing OrganizationInvite record
+    const updatedInvite = await resendOrganizationInvite(
+      inviteId,
+      newToken,
+      newExpiresAt
+    );
+
+    // 10. Return HTTP 200 success response
+    res.status(200).json({
+      success: true,
+      message: 'Invitation resent successfully',
+      data: updatedInvite,
+    });
+  } catch (error) {
+    console.error('Resend organization invite error:', error);
+    if (error instanceof Error) {
+      if (error.message === 'INVITE_NOT_FOUND') {
+        res.status(404).json({
+          success: false,
+          message: 'Invitation not found',
+        });
+        return;
+      }
+      if (error.message === 'INVITE_ALREADY_ACCEPTED') {
+        res.status(409).json({
+          success: false,
+          message: 'Cannot resend an already accepted invitation',
+        });
+        return;
+      }
+    }
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred while resending the organization invite',
+    });
+  }
+}
+
 
 
 

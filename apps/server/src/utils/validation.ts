@@ -247,5 +247,41 @@ export function validateCreateInviteInput(data: {
   return errors;
 }
 
+/**
+ * Validate create project request
+ */
+export function validateCreateProjectInput(data: {
+  name?: unknown;
+  description?: unknown;
+}): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  // Validate name
+  if (!data.name || typeof data.name !== 'string' || data.name.trim() === '') {
+    errors.push({
+      field: 'name',
+      message: 'Project name is required and must be a non-empty string',
+    });
+  } else if (data.name.trim().length > 100) {
+    errors.push({
+      field: 'name',
+      message: 'Project name must not exceed 100 characters',
+    });
+  }
+
+  // Validate description (optional)
+  if (data.description !== undefined && data.description !== null) {
+    if (typeof data.description !== 'string') {
+      errors.push({
+        field: 'description',
+        message: 'Description must be a string if provided',
+      });
+    }
+  }
+
+  return errors;
+}
+
+
 
 

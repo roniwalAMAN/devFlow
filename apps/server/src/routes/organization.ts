@@ -15,7 +15,24 @@ import {
   revokeOrganizationInviteHandler,
   resendOrganizationInviteHandler,
 } from '../controllers/organization';
-import { createProjectHandler } from '../controllers/project';
+import {
+  createProjectHandler,
+  listProjectsHandler,
+  getProjectByIdHandler,
+  updateProjectHandler,
+} from '../controllers/project';
+import {
+  createTaskHandler,
+  listTasksHandler,
+  getTaskByIdHandler,
+  updateTaskHandler,
+  deleteTaskHandler,
+  moveTaskHandler,
+} from '../controllers/task';
+import {
+  createCommentHandler,
+  listCommentsHandler,
+} from '../controllers/comment';
 import { authenticate } from '../middleware/auth';
 import { requireOrganizationRole } from '../middleware/rbac';
 
@@ -93,6 +110,97 @@ router.post(
   createProjectHandler
 );
 
+// GET /api/organizations/:organizationId/projects (Protected route)
+router.get(
+  '/:organizationId/projects',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN', 'DEVELOPER', 'VIEWER'),
+  listProjectsHandler
+);
+
+// GET /api/organizations/:organizationId/projects/:projectId (Protected route)
+router.get(
+  '/:organizationId/projects/:projectId',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN', 'DEVELOPER', 'VIEWER'),
+  getProjectByIdHandler
+);
+
+// PATCH /api/organizations/:organizationId/projects/:projectId (Protected route)
+router.patch(
+  '/:organizationId/projects/:projectId',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN', 'DEVELOPER'),
+  updateProjectHandler
+);
+
+// POST /api/organizations/:organizationId/projects/:projectId/tasks (Protected route)
+router.post(
+  '/:organizationId/projects/:projectId/tasks',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN', 'DEVELOPER'),
+  createTaskHandler
+);
+
+// GET /api/organizations/:organizationId/projects/:projectId/tasks (Protected route)
+router.get(
+  '/:organizationId/projects/:projectId/tasks',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN', 'DEVELOPER', 'VIEWER'),
+  listTasksHandler
+);
+
+// GET /api/organizations/:organizationId/projects/:projectId/tasks/:taskId (Protected route)
+router.get(
+  '/:organizationId/projects/:projectId/tasks/:taskId',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN', 'DEVELOPER', 'VIEWER'),
+  getTaskByIdHandler
+);
+
+// PATCH /api/organizations/:organizationId/projects/:projectId/tasks/:taskId (Protected route)
+router.patch(
+  '/:organizationId/projects/:projectId/tasks/:taskId',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN', 'DEVELOPER'),
+  updateTaskHandler
+);
+
+// PATCH /api/organizations/:organizationId/projects/:projectId/tasks/:taskId/move (Protected route)
+router.patch(
+  '/:organizationId/projects/:projectId/tasks/:taskId/move',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN', 'DEVELOPER'),
+  moveTaskHandler
+);
+
+// DELETE /api/organizations/:organizationId/projects/:projectId/tasks/:taskId (Protected route)
+router.delete(
+  '/:organizationId/projects/:projectId/tasks/:taskId',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN'),
+  deleteTaskHandler
+);
+
+// POST /api/organizations/:organizationId/projects/:projectId/tasks/:taskId/comments (Protected route)
+router.post(
+  '/:organizationId/projects/:projectId/tasks/:taskId/comments',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN', 'DEVELOPER', 'VIEWER'),
+  createCommentHandler
+);
+
+// GET /api/organizations/:organizationId/projects/:projectId/tasks/:taskId/comments (Protected route)
+router.get(
+  '/:organizationId/projects/:projectId/tasks/:taskId/comments',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN', 'DEVELOPER', 'VIEWER'),
+  listCommentsHandler
+);
+
 export default router;
+
+
+
 
 

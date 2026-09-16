@@ -13,22 +13,27 @@ import { slugify } from '../utils/slug';
  */
 export async function generateUniqueProjectSlug(
   organizationId: string,
-  name: string
+  name: string,
+  excludeProjectId?: string
 ): Promise<string> {
   const baseSlug = slugify(name) || 'project';
   let slug = baseSlug;
   let counter = 2;
 
-  while (
-    await prisma.project.findUnique({
+  while (true) {
+    const existing = await prisma.project.findUnique({
       where: {
         organizationId_slug: {
           organizationId,
           slug,
         },
       },
-    })
-  ) {
+    });
+
+    if (!existing || (excludeProjectId && existing.id === excludeProjectId)) {
+      break;
+    }
+
     slug = `${baseSlug}-${counter}`;
     counter++;
   }
@@ -107,4 +112,78 @@ export async function getOrganizationProjects(organizationId: string) {
     },
   });
 }
+
+/**
+ * Get project details by projectId and organizationId
+ * Includes creator information with safe fields
+ */
+export async function getProjectDetails(
+  organizationId: string,
+  projectId: string
+) {
+  return prisma.project.findFirst({
+    where: {
+      id: projectId,
+      organizationId,
+    },
+    select: {
+      id: true,
+      organizationId: true,
+      name: true,
+      description: true,
+      slug: true,
+      createdById: true,
+      createdAt: true,
+      updatedAt: true,
+      createdBy: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          avatar: true,
+        },
+      },
+    },
+  });
+}
+
+/**
+ * Find project by projectId and organizationId
+ */
+export async function findProjectByIdAndOrg(
+  organizationId: string,
+  projectId: string
+): Promise<Project | null> {
+  return prisma.project.findFirst({
+    where: {
+      id: projectId,
+      organizationId,
+    },
+  });
+}
+
+/**
+ * Update project fields (name, description, slug)
+ */
+export async function updateProject(
+  projectId: string,
+  data: {
+    name?: string;
+    description?: string | null;
+    slug?: string;
+  }
+): Promise<Project> {
+  return prisma.project.update({
+    where: {
+      id: projectId,
+    },
+    data: {
+      ...(data.name !== undefined && { name: data.name }),
+      ...(data.description !== undefined && { description: data.description }),
+      ...(data.slug !== undefined && { slug: data.slug }),
+    },
+  });
+}
+
+
 

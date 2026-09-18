@@ -20,6 +20,7 @@ import {
   listProjectsHandler,
   getProjectByIdHandler,
   updateProjectHandler,
+  deleteProjectHandler,
 } from '../controllers/project';
 import {
   createTaskHandler,
@@ -32,9 +33,25 @@ import {
 import {
   createCommentHandler,
   listCommentsHandler,
+  updateCommentHandler,
+  deleteCommentHandler,
 } from '../controllers/comment';
+import {
+  sendChatMessageHandler,
+  listChatMessagesHandler,
+} from '../controllers/chat';
+import { listOrganizationActivityHandler } from '../controllers/activity';
+import {
+  linkProjectRepoHandler,
+  unlinkProjectRepoHandler,
+  getProjectRepoDetailsHandler,
+  getProjectCommitsHandler,
+  getProjectPullsHandler,
+  getProjectIssuesHandler,
+} from '../controllers/projectGithub';
 import { authenticate } from '../middleware/auth';
 import { requireOrganizationRole } from '../middleware/rbac';
+import { githubRateLimiter } from '../middleware/rateLimit';
 
 const router: ExpressRouter = Router();
 
@@ -46,6 +63,14 @@ router.get('/', authenticate, listOrganizationsHandler);
 
 // GET /api/organizations/:organizationId (Protected route)
 router.get('/:organizationId', authenticate, getOrganizationByIdHandler);
+
+// GET /api/organizations/:organizationId/activity (Protected route - OWNER, ADMIN only)
+router.get(
+  '/:organizationId/activity',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN'),
+  listOrganizationActivityHandler
+);
 
 // POST /api/organizations/:organizationId/members (Protected route)
 router.post(
@@ -134,6 +159,66 @@ router.patch(
   updateProjectHandler
 );
 
+// DELETE /api/organizations/:organizationId/projects/:projectId (Protected route - OWNER, ADMIN only)
+router.delete(
+  '/:organizationId/projects/:projectId',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN'),
+  deleteProjectHandler
+);
+
+// POST /api/organizations/:organizationId/projects/:projectId/github/repository (OWNER, ADMIN only)
+router.post(
+  '/:organizationId/projects/:projectId/github/repository',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN'),
+  githubRateLimiter,
+  linkProjectRepoHandler
+);
+
+// DELETE /api/organizations/:organizationId/projects/:projectId/github/repository (OWNER, ADMIN only)
+router.delete(
+  '/:organizationId/projects/:projectId/github/repository',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN'),
+  unlinkProjectRepoHandler
+);
+
+// GET /api/organizations/:organizationId/projects/:projectId/github/repository (All members)
+router.get(
+  '/:organizationId/projects/:projectId/github/repository',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN', 'DEVELOPER', 'VIEWER'),
+  getProjectRepoDetailsHandler
+);
+
+// GET /api/organizations/:organizationId/projects/:projectId/github/commits (All members)
+router.get(
+  '/:organizationId/projects/:projectId/github/commits',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN', 'DEVELOPER', 'VIEWER'),
+  githubRateLimiter,
+  getProjectCommitsHandler
+);
+
+// GET /api/organizations/:organizationId/projects/:projectId/github/pulls (All members)
+router.get(
+  '/:organizationId/projects/:projectId/github/pulls',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN', 'DEVELOPER', 'VIEWER'),
+  githubRateLimiter,
+  getProjectPullsHandler
+);
+
+// GET /api/organizations/:organizationId/projects/:projectId/github/issues (All members)
+router.get(
+  '/:organizationId/projects/:projectId/github/issues',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN', 'DEVELOPER', 'VIEWER'),
+  githubRateLimiter,
+  getProjectIssuesHandler
+);
+
 // POST /api/organizations/:organizationId/projects/:projectId/tasks (Protected route)
 router.post(
   '/:organizationId/projects/:projectId/tasks',
@@ -198,9 +283,36 @@ router.get(
   listCommentsHandler
 );
 
+// PATCH /api/organizations/:organizationId/projects/:projectId/tasks/:taskId/comments/:commentId (Protected route)
+router.patch(
+  '/:organizationId/projects/:projectId/tasks/:taskId/comments/:commentId',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN', 'DEVELOPER', 'VIEWER'),
+  updateCommentHandler
+);
+
+// DELETE /api/organizations/:organizationId/projects/:projectId/tasks/:taskId/comments/:commentId (Protected route)
+router.delete(
+  '/:organizationId/projects/:projectId/tasks/:taskId/comments/:commentId',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN', 'DEVELOPER', 'VIEWER'),
+  deleteCommentHandler
+);
+
+// POST /api/organizations/:organizationId/chat/messages (Protected route)
+router.post(
+  '/:organizationId/chat/messages',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN', 'DEVELOPER', 'VIEWER'),
+  sendChatMessageHandler
+);
+
+// GET /api/organizations/:organizationId/chat/messages (Protected route)
+router.get(
+  '/:organizationId/chat/messages',
+  authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN', 'DEVELOPER', 'VIEWER'),
+  listChatMessagesHandler
+);
+
 export default router;
-
-
-
-
-

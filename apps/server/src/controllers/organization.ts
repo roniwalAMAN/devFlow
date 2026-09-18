@@ -31,6 +31,7 @@ import {
   resendOrganizationInvite,
 } from '../services/organization';
 import { findUserByEmail } from '../services/user';
+import { logActivity, ACTIVITY_ACTIONS } from '../services/activity';
 
 /**
  * POST /api/organizations
@@ -69,7 +70,17 @@ export async function createOrganizationHandler(
       name as string
     );
 
-    // 4. Return safe HTTP 201 response
+    // 4. Record Audit Log
+    await logActivity({
+      organizationId: organization.id,
+      userId: req.user.userId,
+      action: ACTIVITY_ACTIONS.ORGANIZATION_CREATED,
+      entityType: 'ORGANIZATION',
+      entityId: organization.id,
+      metadata: { name: organization.name, slug: organization.slug },
+    });
+
+    // 5. Return safe HTTP 201 response
     res.status(201).json({
       success: true,
       message: 'Organization created successfully',

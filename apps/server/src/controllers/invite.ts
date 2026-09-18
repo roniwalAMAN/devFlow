@@ -10,6 +10,7 @@ import {
   getOrganizationMember,
   acceptOrganizationInvite,
 } from '../services/organization';
+import { logActivity, ACTIVITY_ACTIONS } from '../services/activity';
 
 /**
  * POST /api/invites/:token/accept
@@ -114,7 +115,17 @@ export async function acceptInviteHandler(
       invite.role
     );
 
-    // 8. Return HTTP 200 success response (without exposing invite token or sensitive data)
+    // 8. Record Audit Log
+    await logActivity({
+      organizationId: result.organizationId,
+      userId: user.id,
+      action: ACTIVITY_ACTIONS.INVITE_ACCEPTED,
+      entityType: 'INVITE',
+      entityId: invite.id,
+      metadata: { email: userEmail, role: result.role },
+    });
+
+    // 9. Return HTTP 200 success response (without exposing invite token or sensitive data)
     res.status(200).json({
       success: true,
       message: 'Invitation accepted successfully',

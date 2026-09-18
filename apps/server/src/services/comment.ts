@@ -72,6 +72,79 @@ export async function getTaskComments(
 }
 
 /**
+ * Get comment details verifying full hierarchy:
+ * organization -> project -> task -> comment
+ */
+export async function getCommentDetails(
+  organizationId: string,
+  projectId: string,
+  taskId: string,
+  commentId: string
+): Promise<TaskCommentWithAuthor | null> {
+  return prisma.taskComment.findFirst({
+    where: {
+      id: commentId,
+      taskId,
+      task: {
+        projectId,
+        project: {
+          organizationId,
+        },
+      },
+    },
+    include: {
+      author: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          avatar: true,
+        },
+      },
+    },
+  });
+}
+
+/**
+ * Update a task comment content
+ */
+export async function updateTaskComment(
+  commentId: string,
+  content: string
+): Promise<TaskCommentWithAuthor> {
+  return prisma.taskComment.update({
+    where: {
+      id: commentId,
+    },
+    data: {
+      content: content.trim(),
+    },
+    include: {
+      author: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          avatar: true,
+        },
+      },
+    },
+  });
+}
+
+/**
+ * Delete a task comment
+ */
+export async function deleteTaskComment(commentId: string): Promise<boolean> {
+  const result = await prisma.taskComment.deleteMany({
+    where: {
+      id: commentId,
+    },
+  });
+  return result.count > 0;
+}
+
+/**
  * Format comment response object with safe author fields
  */
 export function formatCommentResponse(comment: TaskCommentWithAuthor) {
@@ -90,3 +163,4 @@ export function formatCommentResponse(comment: TaskCommentWithAuthor) {
     },
   };
 }
+

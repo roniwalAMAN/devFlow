@@ -6,6 +6,7 @@ allowBuilds:
   '@prisma/engines': false
   bcrypt: true
   esbuild: false
+  msgpackr-extract: set this to true or false
   prisma: false
   unrs-resolver: false
 minimumReleaseAgeExclude:

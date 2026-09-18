@@ -330,6 +330,13 @@ export async function deleteTask(
 }
 
 /**
+ * Moved task result type containing updated task and affected task IDs
+ */
+export type MovedTaskResult = TaskWithRelations & {
+  affectedTaskIds: string[];
+};
+
+/**
  * Move / reorder a task within same column or across status columns
  */
 export async function moveTask(
@@ -340,7 +347,7 @@ export async function moveTask(
     status: TaskStatus;
     position: number;
   }
-): Promise<TaskWithRelations | null> {
+): Promise<MovedTaskResult | null> {
   return prisma.$transaction(async (tx) => {
     // 1. Verify task exists, belongs to project, and project belongs to organization
     const task = await tx.task.findFirst({
@@ -360,6 +367,7 @@ export async function moveTask(
     const currentStatus = task.status;
     const targetStatus = data.status;
     const requestedPosition = data.position;
+    const affectedTaskIds: string[] = [];
 
     if (currentStatus === targetStatus) {
       // CASE 1: Same status column reordering
@@ -387,6 +395,7 @@ export async function moveTask(
       for (let i = 0; i < remainingTasks.length; i++) {
         const t = remainingTasks[i];
         if (t.position !== i || t.id === taskId) {
+          affectedTaskIds.push(t.id);
           await tx.task.update({
             where: { id: t.id },
             data: { position: i },
@@ -408,6 +417,7 @@ export async function moveTask(
       for (let i = 0; i < remainingSourceTasks.length; i++) {
         const t = remainingSourceTasks[i];
         if (t.position !== i) {
+          affectedTaskIds.push(t.id);
           await tx.task.update({
             where: { id: t.id },
             data: { position: i },
@@ -434,6 +444,7 @@ export async function moveTask(
       for (let i = 0; i < destTasks.length; i++) {
         const t = destTasks[i];
         if (t.id === taskId) {
+          affectedTaskIds.push(t.id);
           await tx.task.update({
             where: { id: taskId },
             data: {
@@ -442,6 +453,7 @@ export async function moveTask(
             },
           });
         } else if (t.position !== i) {
+          affectedTaskIds.push(t.id);
           await tx.task.update({
             where: { id: t.id },
             data: { position: i },
@@ -450,8 +462,8 @@ export async function moveTask(
       }
     }
 
-    // 3. Fetch and return updated task with safe relations
-    return tx.task.findUnique({
+    // 3. Fetch and return updated task with safe relations and affected IDs
+    const updatedTask = await tx.task.findUnique({
       where: { id: taskId },
       include: {
         assignee: {
@@ -472,6 +484,15 @@ export async function moveTask(
         },
       },
     });
+
+    if (!updatedTask) {
+      return null;
+    }
+
+    return {
+      ...updatedTask,
+      affectedTaskIds,
+    };
   });
 }
 

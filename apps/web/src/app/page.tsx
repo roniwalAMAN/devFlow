@@ -1,69 +1,169 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import React, { useEffect } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '../context/AuthContext';
+import {
+  Sparkles,
+  ArrowRight,
+  Radio,
+  Database,
+  Cpu,
+  ShieldCheck,
+  Zap,
+  CheckCircle2,
+  Users,
+  Layers,
+} from 'lucide-react';
+import { Github } from '../components/Icons';
+
+export default function HomePage() {
+  const router = useRouter();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      router.push('/dashboard');
+    }
+  }, [isLoading, isAuthenticated, router]);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col selection:bg-indigo-500 selection:text-white">
+      {/* Top Navbar */}
+      <header className="border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md sticky top-0 z-40">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shadow-md shadow-indigo-500/20">
+              <Sparkles className="h-4 w-4 text-white" />
+            </div>
+            <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-white via-zinc-100 to-zinc-400 bg-clip-text text-transparent">
+              DevFlow
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Link
+              href="/login"
+              className="rounded-xl px-4 py-2 text-xs font-semibold text-zinc-300 hover:text-white transition"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+              Sign In
+            </Link>
+            <Link
+              href="/register"
+              className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-indigo-600/30 hover:from-indigo-500 hover:to-purple-500 transition"
             >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+              <span>Get Started</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+      </header>
+
+      {/* Hero Section */}
+      <main className="flex-1 flex flex-col items-center justify-center text-center px-4 py-16 sm:py-24 max-w-5xl mx-auto space-y-8">
+        <div className="inline-flex items-center gap-2 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-3.5 py-1 text-xs font-medium text-indigo-300 backdrop-blur-md">
+          <Radio className="h-3.5 w-3.5 text-indigo-400 animate-pulse" />
+          <span>Real-Time Engineering Workspace & Collab Layer</span>
+        </div>
+
+        <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-white max-w-4xl leading-tight">
+          High-Velocity Sprints with{' '}
+          <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+            Real-Time Collaboration
+          </span>{' '}
+          & AI Copilot
+        </h1>
+
+        <p className="text-sm sm:text-base text-zinc-400 max-w-2xl leading-relaxed">
+          DevFlow combines real-time Kanban sprint boards, Socket.IO live events, Gemini AI coding assistance, AES-256 encrypted GitHub sync, Redis caching, and automated audit logging in one unified workspace.
+        </p>
+
+        <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
+          <Link
+            href="/login"
+            className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 px-6 py-3.5 text-sm font-bold text-white shadow-xl shadow-indigo-600/25 hover:scale-105 transition"
           >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            <span>Launch Workspace</span>
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+
+          <Link
+            href="/login"
+            className="flex items-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-900/80 px-5 py-3.5 text-sm font-semibold text-zinc-300 hover:border-zinc-700 hover:text-white transition"
           >
-            Documentation
-          </a>
+            <span>Try One-Click Demo</span>
+          </Link>
+        </div>
+
+        {/* Feature Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pt-16 text-left w-full">
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6 backdrop-blur-sm space-y-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+              <Radio className="h-5 w-5" />
+            </div>
+            <h3 className="font-bold text-sm text-white">Live Socket.IO Sync</h3>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Instant multi-user task moves, inline comments, team chat, private user notifications, and multi-device presence tracking.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6 backdrop-blur-sm space-y-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <h3 className="font-bold text-sm text-white">Gemini AI Assistant</h3>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Context-enriched code explanation, test generation, and bug fixing with pre-flight sensitive credential redaction.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6 backdrop-blur-sm space-y-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+              <Github className="h-5 w-5" />
+            </div>
+            <h3 className="font-bold text-sm text-white">GitHub OAuth & Sync</h3>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              AES-256-GCM encrypted tokens at rest. Sync repository details, commit history, pull requests, and issues directly inside your workspace.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6 backdrop-blur-sm space-y-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400">
+              <Database className="h-5 w-5" />
+            </div>
+            <h3 className="font-bold text-sm text-white">Redis Cache & Rate Limiting</h3>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              High-speed read caching with automatic mutation invalidation and sliding-window rate limiters with graceful memory fallback.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6 backdrop-blur-sm space-y-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+              <Cpu className="h-5 w-5" />
+            </div>
+            <h3 className="font-bold text-sm text-white">BullMQ Background Jobs</h3>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Non-blocking job queues for AI batching, notifications dispatch, GitHub syncing, and analytics with exponential backoff retries.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6 backdrop-blur-sm space-y-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <h3 className="font-bold text-sm text-white">Audit Trail & RBAC</h3>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Full organizational audit logging with automatic credential scrubbing and role-based access control (OWNER, ADMIN, DEVELOPER, VIEWER).
+            </p>
+          </div>
         </div>
       </main>
+
+      {/* Footer */}
+      <footer className="border-t border-zinc-800/80 bg-zinc-950/60 py-6 text-center text-xs text-zinc-500">
+        DevFlow • Modern Real-Time Engineering Workspace • Built with Next.js, Express, PostgreSQL, Redis, Socket.IO & Gemini AI
+      </footer>
     </div>
   );
 }

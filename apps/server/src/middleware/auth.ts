@@ -4,7 +4,11 @@
  */
 
 import type { Request, Response, NextFunction } from 'express';
-import { verifyToken } from '../utils/jwt';
+import { verifyToken, type JwtUserPayload } from '../utils/jwt';
+
+export type AuthenticatedRequest = Request & {
+  user?: JwtUserPayload;
+};
 
 /**
  * Express middleware to authenticate requests via JWT Bearer token

@@ -7,56 +7,74 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true 
 dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
 dotenv.config({ path: path.resolve(process.cwd(), '../../.env.local'), override: true });
 
-import express from 'express';
-import { checkDatabaseConnection } from './services/db';
-import authRoutes from './routes/auth';
-import organizationRoutes from './routes/organization';
-import inviteRoutes from './routes/invite';
+import { createServer } from 'http';
+import { prisma } from '@devflow/database';
+import { createApp } from './app';
+import { initializeSocket, closeSocket } from './socket/socket';
+import { initWorkers, closeWorkers } from './jobs/workers';
+import { closeQueues } from './jobs/queues';
+import { closeRedis, getRedisClient } from './services/redis';
 
-const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
-app.use(express.json());
+// 1. Create Express App
+const app = createApp();
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/organizations', organizationRoutes);
-app.use('/api/invites', inviteRoutes);
+// 2. Create shared HTTP Server
+const httpServer = createServer(app);
 
-// Health check endpoint - API only
-app.get('/api/health', (_req, res) => {
-  res.json({
-    success: true,
-    message: 'DevFlow API is running',
-  });
-});
+// 3. Initialize Socket.IO attached to HTTP server
+const io = initializeSocket(httpServer);
 
-// Database health check endpoint
-app.get('/api/health/db', async (_req, res) => {
-  try {
-    const isConnected = await checkDatabaseConnection();
+// 4. Initialize Redis and BullMQ background workers
+getRedisClient();
+initWorkers();
 
-    if (isConnected) {
-      res.status(200).json({
-        success: true,
-        message: 'Database connection is healthy',
-      });
-    } else {
-      res.status(500).json({
-        success: false,
-        message: 'Database connection failed',
-      });
-    }
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Database health check error',
-    });
-  }
-});
-
-// Start server
-app.listen(PORT, () => {
+// 5. Start shared HTTP + WebSocket Server
+httpServer.listen(PORT, () => {
   console.log(`🚀 DevFlow server running on http://localhost:${PORT}`);
 });
+
+// Graceful shutdown handling
+let isShuttingDown = false;
+
+async function handleGracefulShutdown(signal: string) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`\nReceived ${signal}. Shutting down gracefully...`);
+
+  try {
+    // 1. Close background workers & queues
+    await closeWorkers();
+    await closeQueues();
+    await closeRedis();
+    console.log('Background workers, queues, and Redis closed.');
+
+    // 2. Close Socket.IO server
+    await closeSocket();
+    console.log('Socket.IO connections closed.');
+
+    // 3. Close HTTP server
+    await new Promise<void>((resolve, reject) => {
+      httpServer.close((err) => {
+        if (err) return reject(err);
+        resolve();
+      });
+    });
+    console.log('HTTP server closed.');
+
+    // 4. Disconnect database
+    await prisma.$disconnect();
+    console.log('Database disconnected.');
+
+    process.exit(0);
+  } catch (error) {
+    console.error('Error during graceful shutdown:', error);
+    process.exit(1);
+  }
+}
+
+process.on('SIGTERM', () => handleGracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => handleGracefulShutdown('SIGINT'));
+
+export { app, httpServer, io };

@@ -27,6 +27,24 @@ import {
   moveTask,
   type UpdateTaskData,
 } from '../services/task';
+import {
+  emitTaskCreated,
+  emitTaskUpdated,
+  emitTaskDeleted,
+  emitTaskMoved,
+  emitNotificationNew,
+} from '../socket/socketEvents';
+import {
+  createNotification,
+  formatNotificationResponse,
+  NOTIFICATION_TYPES,
+} from '../services/notification';
+import { logActivity, ACTIVITY_ACTIONS } from '../services/activity';
+import {
+  cacheGet,
+  cacheSet,
+  invalidateProjectTasksCache,
+} from '../services/cache';
 
 /**
  * POST /api/organizations/:organizationId/projects/:projectId/tasks
@@ -175,10 +193,44 @@ export async function createTaskHandler(
       dueDate: parsedDueDate,
     });
 
-    // 10. Return HTTP 201
+    const formattedTask = formatTaskResponse(task);
+
+    // 10. Emit real-time task:created event to organization room
+    emitTaskCreated(organizationId, projectId, formattedTask);
+
+    // 11. Record Audit Log & Invalidate Cache
+    await Promise.all([
+      logActivity({
+        organizationId,
+        userId: req.user.userId,
+        action: ACTIVITY_ACTIONS.TASK_CREATED,
+        entityType: 'TASK',
+        entityId: task.id,
+        metadata: { title: task.title, status: task.status, priority: task.priority },
+      }),
+      invalidateProjectTasksCache(projectId),
+    ]);
+
+    // 12. Auto-create notification if assigned to another user
+    if (validatedAssigneeId && validatedAssigneeId !== req.user.userId) {
+      try {
+        const notif = await createNotification({
+          userId: validatedAssigneeId,
+          organizationId,
+          type: NOTIFICATION_TYPES.TASK_ASSIGNED,
+          title: 'New task assigned to you',
+          message: `You have been assigned to "${task.title}"`,
+        });
+        emitNotificationNew(validatedAssigneeId, formatNotificationResponse(notif));
+      } catch (err) {
+        console.error('Failed to create task assigned notification:', err);
+      }
+    }
+
+    // 12. Return HTTP 201
     res.status(201).json({
       success: true,
-      data: formatTaskResponse(task),
+      data: formattedTask,
     });
   } catch (error) {
     console.error('Create task error:', error);
@@ -251,13 +303,28 @@ export async function listTasksHandler(
       return;
     }
 
-    // 5. Fetch tasks for the project
-    const tasks = await getProjectTasks(projectId);
+    // 5. Check cache
+    const cacheKey = `proj:${projectId}:tasks`;
+    const cached = await cacheGet<any[]>(cacheKey);
+    if (cached) {
+      res.status(200).json({
+        success: true,
+        data: cached,
+      });
+      return;
+    }
 
-    // 6. Return HTTP 200 with formatted tasks
+    // 6. Fetch tasks for the project
+    const tasks = await getProjectTasks(projectId);
+    const formatted = tasks.map(formatTaskResponse);
+
+    // Cache for 5 minutes
+    await cacheSet(cacheKey, formatted, 300);
+
+    // 7. Return HTTP 200 with formatted tasks
     res.status(200).json({
       success: true,
-      data: tasks.map(formatTaskResponse),
+      data: formatted,
     });
   } catch (error) {
     console.error('List tasks error:', error);
@@ -530,10 +597,69 @@ export async function updateTaskHandler(
       return;
     }
 
-    // 10. Return HTTP 200 with formatted safe task data
+    const formattedTask = formatTaskResponse(updatedTask);
+
+    // 10. Emit real-time task:updated event to organization room
+    emitTaskUpdated(organizationId, projectId, formattedTask);
+
+    // 11. Record Audit Log & Invalidate Cache
+    await Promise.all([
+      logActivity({
+        organizationId,
+        userId: req.user.userId,
+        action: ACTIVITY_ACTIONS.TASK_UPDATED,
+        entityType: 'TASK',
+        entityId: updatedTask.id,
+        metadata: { title: updatedTask.title, status: updatedTask.status },
+      }),
+      invalidateProjectTasksCache(projectId),
+    ]);
+
+    // 12. Auto-create notification if reassigned
+    if (
+      validatedAssigneeId &&
+      validatedAssigneeId !== existingTask.assigneeId &&
+      validatedAssigneeId !== req.user.userId
+    ) {
+      try {
+        const notif = await createNotification({
+          userId: validatedAssigneeId,
+          organizationId,
+          type: NOTIFICATION_TYPES.TASK_REASSIGNED,
+          title: 'Task reassigned to you',
+          message: `You have been assigned to "${updatedTask.title}"`,
+        });
+        emitNotificationNew(validatedAssigneeId, formatNotificationResponse(notif));
+      } catch (err) {
+        console.error('Failed to create task reassigned notification:', err);
+      }
+    }
+
+    // 13. Auto-create notification if moved to DONE
+    if (
+      status === TaskStatus.DONE &&
+      existingTask.status !== TaskStatus.DONE
+    ) {
+      if (existingTask.createdById && existingTask.createdById !== req.user.userId) {
+        try {
+          const notif = await createNotification({
+            userId: existingTask.createdById,
+            organizationId,
+            type: NOTIFICATION_TYPES.TASK_COMPLETED,
+            title: 'Task completed',
+            message: `Task "${updatedTask.title}" was moved to DONE`,
+          });
+          emitNotificationNew(existingTask.createdById, formatNotificationResponse(notif));
+        } catch (err) {
+          console.error('Failed to create task completed notification:', err);
+        }
+      }
+    }
+
+    // 14. Return HTTP 200 with formatted safe task data
     res.status(200).json({
       success: true,
-      data: formatTaskResponse(updatedTask),
+      data: formattedTask,
     });
   } catch (error) {
     console.error('Update task error:', error);
@@ -639,7 +765,23 @@ export async function deleteTaskHandler(
       return;
     }
 
-    // 7. Return HTTP 200
+    // 7. Emit real-time task:deleted event to organization room
+    emitTaskDeleted(organizationId, projectId, taskId);
+
+    // 8. Record Audit Log & Invalidate Cache
+    await Promise.all([
+      logActivity({
+        organizationId,
+        userId: req.user.userId,
+        action: ACTIVITY_ACTIONS.TASK_DELETED,
+        entityType: 'TASK',
+        entityId: taskId,
+        metadata: { title: existingTask.title },
+      }),
+      invalidateProjectTasksCache(projectId),
+    ]);
+
+    // 9. Return HTTP 200
     res.status(200).json({
       success: true,
       message: 'Task deleted successfully',
@@ -766,10 +908,54 @@ export async function moveTaskHandler(
       return;
     }
 
-    // 8. Return HTTP 200 with formatted safe task data
+    const formattedTask = formatTaskResponse(movedTask);
+
+    // 8. Emit real-time task:moved event to organization room
+    emitTaskMoved(
+      organizationId,
+      projectId,
+      formattedTask,
+      movedTask.affectedTaskIds || [movedTask.id]
+    );
+
+    // 9. Record Audit Log & Invalidate Cache
+    await Promise.all([
+      logActivity({
+        organizationId,
+        userId: req.user.userId,
+        action: ACTIVITY_ACTIONS.TASK_MOVED,
+        entityType: 'TASK',
+        entityId: movedTask.id,
+        metadata: { status: movedTask.status, position: movedTask.position },
+      }),
+      invalidateProjectTasksCache(projectId),
+    ]);
+
+    // 10. Auto-create notification if moved to DONE
+    if (
+      status === TaskStatus.DONE &&
+      existingTask.status !== TaskStatus.DONE
+    ) {
+      if (existingTask.createdById && existingTask.createdById !== req.user.userId) {
+        try {
+          const notif = await createNotification({
+            userId: existingTask.createdById,
+            organizationId,
+            type: NOTIFICATION_TYPES.TASK_COMPLETED,
+            title: 'Task completed',
+            message: `Task "${movedTask.title}" was moved to DONE`,
+          });
+          emitNotificationNew(existingTask.createdById, formatNotificationResponse(notif));
+        } catch (err) {
+          console.error('Failed to create task completed notification:', err);
+        }
+      }
+    }
+
+    // 11. Return HTTP 200 with formatted safe task data
     res.status(200).json({
       success: true,
-      data: formatTaskResponse(movedTask),
+      data: formattedTask,
     });
   } catch (error) {
     console.error('Move task error:', error);

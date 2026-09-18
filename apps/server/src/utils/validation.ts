@@ -656,6 +656,96 @@ export function validateCreateCommentInput(
   return errors;
 }
 
+/**
+ * Allowed fields for updating a comment
+ */
+export const ALLOWED_COMMENT_UPDATE_FIELDS = ['content'];
+
+/**
+ * Validate update comment request
+ */
+export function validateUpdateCommentInput(
+  data: Record<string, unknown>
+): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  // Check for unknown fields
+  const keys = Object.keys(data);
+  for (const key of keys) {
+    if (!ALLOWED_COMMENT_UPDATE_FIELDS.includes(key)) {
+      errors.push({
+        field: key,
+        message: `Field '${key}' is not allowed in update comment payload`,
+      });
+    }
+  }
+
+  // Validate content (required, non-empty, max 5000 chars)
+  if (
+    !data.content ||
+    typeof data.content !== 'string' ||
+    data.content.trim() === ''
+  ) {
+    errors.push({
+      field: 'content',
+      message: 'Comment content is required and must be a non-empty string',
+    });
+  } else if (data.content.trim().length > 5000) {
+    errors.push({
+      field: 'content',
+      message: 'Comment content must not exceed 5000 characters',
+    });
+  }
+
+  return errors;
+}
+
+/**
+ * Allowed fields for sending a chat message
+ */
+export const ALLOWED_CHAT_MESSAGE_FIELDS = ['content'];
+
+/**
+ * Validate send chat message request
+ */
+export function validateSendChatMessageInput(
+  data: Record<string, unknown>
+): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  // Check for unknown fields
+  const keys = Object.keys(data);
+  for (const key of keys) {
+    if (!ALLOWED_CHAT_MESSAGE_FIELDS.includes(key)) {
+      errors.push({
+        field: key,
+        message: `Field '${key}' is not allowed in chat message payload`,
+      });
+    }
+  }
+
+  // Validate content (required, non-empty, max 5000 chars)
+  if (
+    !data.content ||
+    typeof data.content !== 'string' ||
+    data.content.trim() === ''
+  ) {
+    errors.push({
+      field: 'content',
+      message: 'Chat message content is required and must be a non-empty string',
+    });
+  } else if (data.content.trim().length > 5000) {
+    errors.push({
+      field: 'content',
+      message: 'Chat message content must not exceed 5000 characters',
+    });
+  }
+
+  return errors;
+}
+
+
+
 
 
 

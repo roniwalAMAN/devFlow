@@ -185,5 +185,13 @@ export async function updateProject(
   });
 }
 
-
-
+/**
+ * Delete project by projectId
+ */
+export async function deleteProject(projectId: string): Promise<Project> {
+  return prisma.project.delete({
+    where: {
+      id: projectId,
+    },
+  });
+}

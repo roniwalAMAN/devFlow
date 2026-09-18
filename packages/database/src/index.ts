@@ -1,7 +1,20 @@
 import { PrismaClient, MemberRole, TaskStatus, TaskPriority } from '@prisma/client';
 
 export { PrismaClient, MemberRole, TaskStatus, TaskPriority };
-export type { User, Organization, OrganizationMember, RefreshToken, OrganizationInvite, Project, Task, TaskComment } from '@prisma/client';
+export type {
+  User,
+  Organization,
+  OrganizationMember,
+  RefreshToken,
+  OrganizationInvite,
+  Project,
+  Task,
+  TaskComment,
+  ChatMessage,
+  Notification,
+  GitHubConnection,
+  ActivityLog,
+} from '@prisma/client';
 export type OrganizationRole = MemberRole;
 export const OrganizationRole = MemberRole;
 

@@ -21,7 +21,14 @@ import {
   generateUniqueProjectSlug,
   findProjectByIdAndOrg,
   updateProject,
+  deleteProject,
 } from '../services/project';
+import { logActivity, ACTIVITY_ACTIONS } from '../services/activity';
+import {
+  cacheGet,
+  cacheSet,
+  invalidateOrganizationProjectsCache,
+} from '../services/cache';
 
 /**
  * POST /api/organizations/:organizationId/projects
@@ -115,7 +122,20 @@ export async function createProjectHandler(
       createdById: req.user.userId,
     });
 
-    // 6. Return HTTP 201 response
+    // 6. Record Audit Log & Invalidate Cache
+    await Promise.all([
+      logActivity({
+        organizationId,
+        userId: req.user.userId,
+        action: ACTIVITY_ACTIONS.PROJECT_CREATED,
+        entityType: 'PROJECT',
+        entityId: project.id,
+        metadata: { name: project.name, slug: project.slug },
+      }),
+      invalidateOrganizationProjectsCache(organizationId),
+    ]);
+
+    // 7. Return HTTP 201 response
     res.status(201).json({
       success: true,
       data: formatProjectResponse(project),
@@ -196,10 +216,24 @@ export async function listProjectsHandler(
       return;
     }
 
-    // 4. Fetch projects for this organization
+    // 4. Cache Check
+    const cacheKey = `org:${organizationId}:projects`;
+    const cached = await cacheGet<any[]>(cacheKey);
+    if (cached) {
+      res.status(200).json({
+        success: true,
+        data: cached,
+      });
+      return;
+    }
+
+    // 5. Fetch projects for this organization
     const projects = await getOrganizationProjects(organizationId);
 
-    // 5. Return HTTP 200 response with projects array
+    // Cache for 5 minutes
+    await cacheSet(cacheKey, projects, 300);
+
+    // 6. Return HTTP 200 response with projects array
     res.status(200).json({
       success: true,
       data: projects,
@@ -413,7 +447,20 @@ export async function updateProjectHandler(
     // 7. Update project in database
     const updatedProject = await updateProject(existingProject.id, updateData);
 
-    // 8. Return HTTP 200 response
+    // 8. Record Audit Log & Invalidate Cache
+    await Promise.all([
+      logActivity({
+        organizationId,
+        userId: req.user.userId,
+        action: ACTIVITY_ACTIONS.PROJECT_UPDATED,
+        entityType: 'PROJECT',
+        entityId: updatedProject.id,
+        metadata: { name: updatedProject.name, slug: updatedProject.slug },
+      }),
+      invalidateOrganizationProjectsCache(organizationId),
+    ]);
+
+    // 9. Return HTTP 200 response
     res.status(200).json({
       success: true,
       data: formatProjectResponse(updatedProject),
@@ -442,5 +489,107 @@ export async function updateProjectHandler(
   }
 }
 
+/**
+ * DELETE /api/organizations/:organizationId/projects/:projectId
+ * Delete a project within an organization (OWNER, ADMIN only)
+ */
+export async function deleteProjectHandler(
+  req: Request,
+  res: Response
+): Promise<void> {
+  try {
+    // 1. Verify user is authenticated
+    if (!req.user || !req.user.userId) {
+      res.status(401).json({
+        success: false,
+        message: 'Unauthorized',
+      });
+      return;
+    }
 
+    const { organizationId, projectId } = req.params;
 
+    if (!organizationId || !projectId) {
+      res.status(400).json({
+        success: false,
+        message: 'Organization ID and Project ID are required',
+      });
+      return;
+    }
+
+    // 2. Verify organization exists
+    const organization = await findOrganizationById(organizationId);
+    if (!organization) {
+      res.status(404).json({
+        success: false,
+        message: 'Organization not found',
+      });
+      return;
+    }
+
+    // 3. Verify requester is a member with OWNER or ADMIN role
+    const requesterMembership = await getOrganizationMember(
+      organizationId,
+      req.user.userId
+    );
+
+    if (!requesterMembership) {
+      res.status(403).json({
+        success: false,
+        message: 'Forbidden. You are not a member of this organization',
+      });
+      return;
+    }
+
+    const allowedRoles: MemberRole[] = [MemberRole.OWNER, MemberRole.ADMIN];
+    if (!allowedRoles.includes(requesterMembership.role)) {
+      res.status(403).json({
+        success: false,
+        message: 'Forbidden. Only organization owners and admins can delete projects',
+      });
+      return;
+    }
+
+    // 4. Verify project exists within this organization
+    const existingProject = await findProjectByIdAndOrg(
+      organizationId,
+      projectId
+    );
+
+    if (!existingProject) {
+      res.status(404).json({
+        success: false,
+        message: 'Project not found',
+      });
+      return;
+    }
+
+    // 5. Delete project from database
+    await deleteProject(existingProject.id);
+
+    // 6. Record Audit Log & Invalidate Cache
+    await Promise.all([
+      logActivity({
+        organizationId,
+        userId: req.user.userId,
+        action: ACTIVITY_ACTIONS.PROJECT_DELETED,
+        entityType: 'PROJECT',
+        entityId: existingProject.id,
+        metadata: { name: existingProject.name, slug: existingProject.slug },
+      }),
+      invalidateOrganizationProjectsCache(organizationId),
+    ]);
+
+    // 7. Return HTTP 200 response
+    res.status(200).json({
+      success: true,
+      message: 'Project deleted successfully',
+    });
+  } catch (error) {
+    console.error('Delete project error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred while deleting the project',
+    });
+  }
+}

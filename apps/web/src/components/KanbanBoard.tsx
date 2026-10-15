@@ -60,14 +60,19 @@ export function KanbanBoard() {
     setIsCreating(true);
     try {
       const colTasks = tasks.filter((t) => t.status === createColumnStatus);
-      await createTask({
+      const created = await createTask({
         title: newTitle.trim(),
         description: newDescription.trim() || null,
         status: createColumnStatus,
         priority: newPriority,
         position: colTasks.length,
       });
-      setIsCreateModalOpen(false);
+      if (created) {
+        setIsCreateModalOpen(false);
+        setNewTitle('');
+        setNewDescription('');
+        setNewPriority('MEDIUM');
+      }
     } finally {
       setIsCreating(false);
     }

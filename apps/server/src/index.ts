@@ -28,7 +28,9 @@ const io = initializeSocket(httpServer);
 
 // 4. Initialize Redis and BullMQ background workers
 getRedisClient();
-initWorkers();
+if (process.env.RUN_WORKERS !== 'false') {
+  initWorkers();
+}
 
 // 5. Start shared HTTP + WebSocket Server
 httpServer.listen(PORT, () => {

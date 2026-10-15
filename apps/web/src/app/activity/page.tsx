@@ -31,10 +31,15 @@ export default function ActivityLogPage() {
   const [selectedAction, setSelectedAction] = useState('ALL');
   const [isLoading, setIsLoading] = useState(true);
 
-  const orgId = currentOrg?.id || 'acme-engineering';
+  const orgId = currentOrg?.id || '';
 
   const loadActivity = useCallback(async () => {
-    if (!orgId) return;
+    if (!orgId) {
+      setActivityLogs([]);
+      setTotalCount(0);
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
 
     try {

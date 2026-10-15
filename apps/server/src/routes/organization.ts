@@ -76,6 +76,7 @@ router.get(
 router.post(
   '/:organizationId/members',
   authenticate,
+  requireOrganizationRole('OWNER', 'ADMIN'),
   addOrganizationMemberHandler
 );
 

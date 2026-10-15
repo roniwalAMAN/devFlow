@@ -4,7 +4,12 @@
  */
 
 import { notificationsQueue, githubQueue, aiQueue, analyticsQueue } from './queues';
-import { createNotification, CreateNotificationInput } from '../services/notification';
+import {
+  createNotification,
+  formatNotificationResponse,
+  CreateNotificationInput,
+} from '../services/notification';
+import { emitNotificationNew } from '../socket/socketEvents';
 
 /**
  * Enqueue notification delivery job
@@ -23,7 +28,8 @@ export async function enqueueNotificationJob(
 
   // Inline fallback
   try {
-    await createNotification(data);
+    const notif = await createNotification(data);
+    emitNotificationNew(data.userId, formatNotificationResponse(notif));
   } catch (err) {
     console.error('[Notification Producer] Failed inline fallback delivery:', err);
   }

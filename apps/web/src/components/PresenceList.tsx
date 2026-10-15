@@ -18,16 +18,7 @@ interface PresenceListProps {
 export function PresenceList({ members = [] }: PresenceListProps) {
   const { onlineUserIds } = useCollaboration();
 
-  // If no static members list provided, synthesize from onlineUserIds or default set
-  const displayMembers: Member[] =
-    members.length > 0
-      ? members
-      : [
-          { id: 'user-1', name: 'Alice (Owner)', email: 'alice@devflow.com', role: 'OWNER' },
-          { id: 'user-2', name: 'Bob (Admin)', email: 'bob@devflow.com', role: 'ADMIN' },
-          { id: 'user-3', name: 'Charlie (Dev)', email: 'charlie@devflow.com', role: 'DEVELOPER' },
-          { id: 'user-4', name: 'David (Viewer)', email: 'david@devflow.com', role: 'VIEWER' },
-        ];
+  const displayMembers: Member[] = members;
 
   return (
     <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 backdrop-blur-xl">
@@ -42,7 +33,12 @@ export function PresenceList({ members = [] }: PresenceListProps) {
       </div>
 
       <div className="mt-3 space-y-2">
-        {displayMembers.map((member) => {
+        {displayMembers.length === 0 ? (
+          <div className="py-6 text-center text-xs text-zinc-500 italic">
+            No team members in workspace yet.
+          </div>
+        ) : (
+          displayMembers.map((member) => {
           const isOnline = onlineUserIds.includes(member.id);
           return (
             <div
@@ -84,7 +80,8 @@ export function PresenceList({ members = [] }: PresenceListProps) {
               </span>
             </div>
           );
-        })}
+        })
+      )}
       </div>
     </div>
   );

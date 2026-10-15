@@ -60,12 +60,16 @@ export async function createOrganization(
 /**
  * Format organization response object excluding internal/unnecessary fields
  */
-export function formatOrganizationResponse(organization: Organization) {
+export function formatOrganizationResponse(
+  organization: Organization,
+  role: MemberRole = MemberRole.OWNER
+) {
   return {
     id: organization.id,
     name: organization.name,
     slug: organization.slug,
     ownerId: organization.ownerId,
+    role,
     createdAt: organization.createdAt,
     updatedAt: organization.updatedAt,
   };
@@ -73,10 +77,10 @@ export function formatOrganizationResponse(organization: Organization) {
 
 /**
  * Get all organizations where the specified user is a member
- * Returns safe organization fields and safe owner details
+ * Returns safe organization fields, safe owner details, and the current user's membership role
  */
 export async function getUserOrganizations(userId: string) {
-  return prisma.organization.findMany({
+  const organizations = await prisma.organization.findMany({
     where: {
       members: {
         some: {
@@ -99,10 +103,29 @@ export async function getUserOrganizations(userId: string) {
           avatar: true,
         },
       },
+      members: {
+        where: {
+          userId,
+        },
+        select: {
+          role: true,
+        },
+      },
     },
     orderBy: {
       createdAt: 'desc',
     },
+  });
+
+  return organizations.map((org) => {
+    const userRole =
+      org.members?.[0]?.role ??
+      (org.ownerId === userId ? MemberRole.OWNER : MemberRole.DEVELOPER);
+    const { members, ...rest } = org;
+    return {
+      ...rest,
+      role: userRole,
+    };
   });
 }
 
@@ -132,6 +155,8 @@ export async function getOrganizationDetails(organizationId: string) {
       members: {
         select: {
           id: true,
+          userId: true,
+          organizationId: true,
           role: true,
           createdAt: true,
           user: {
@@ -217,6 +242,8 @@ export async function addOrganizationMember(data: {
     },
     select: {
       id: true,
+      userId: true,
+      organizationId: true,
       role: true,
       createdAt: true,
       user: {
@@ -269,6 +296,8 @@ export async function updateOrganizationMemberRole(
     },
     select: {
       id: true,
+      userId: true,
+      organizationId: true,
       role: true,
       user: {
         select: {

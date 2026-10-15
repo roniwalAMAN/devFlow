@@ -12,7 +12,12 @@
   "scripts": {
     "dev": "pnpm -r --parallel dev",
     "build": "pnpm -r build",
-    "start": "pnpm -r start"
+    "start": "pnpm -r start",
+    "test": "pnpm --filter @devflow/server test",
+    "type-check": "pnpm -r type-check",
+    "prisma:generate": "pnpm --filter @devflow/database prisma:generate",
+    "prisma:validate": "prisma validate --schema packages/database/prisma/schema.prisma",
+    "prisma:migrate": "pnpm --filter @devflow/database prisma:migrate"
   },
   "devDependencies": {
     "prisma": "5.22.0"

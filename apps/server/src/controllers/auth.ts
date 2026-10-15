@@ -12,6 +12,7 @@ import {
 import {
   createUser,
   findUserByEmail,
+  findUserById,
   comparePassword,
   formatUserResponse,
   createRefreshTokenRecord,
@@ -239,11 +240,11 @@ export async function logout(req: Request, res: Response): Promise<void> {
 
 /**
  * GET /api/auth/me
- * Return authenticated user info from verified JWT payload
+ * Return authenticated user info from database
  */
 export async function getMe(req: Request, res: Response): Promise<void> {
   try {
-    if (!req.user) {
+    if (!req.user || !req.user.userId) {
       res.status(401).json({
         success: false,
         message: 'Unauthorized',
@@ -251,10 +252,19 @@ export async function getMe(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    const user = await findUserById(req.user.userId);
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+      return;
+    }
+
     res.status(200).json({
       success: true,
       data: {
-        user: req.user,
+        user: formatUserResponse(user),
       },
     });
   } catch (error) {

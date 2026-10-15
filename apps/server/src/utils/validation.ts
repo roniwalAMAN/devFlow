@@ -397,7 +397,7 @@ export function validateCreateTaskInput(data: {
   }
 
   // Validate assigneeId (optional)
-  if (data.assigneeId !== undefined && data.assigneeId !== null) {
+  if (data.assigneeId !== undefined && data.assigneeId !== null && data.assigneeId !== '') {
     if (typeof data.assigneeId !== 'string' || data.assigneeId.trim() === '') {
       errors.push({
         field: 'assigneeId',
@@ -407,7 +407,7 @@ export function validateCreateTaskInput(data: {
   }
 
   // Validate dueDate (optional)
-  if (data.dueDate !== undefined && data.dueDate !== null) {
+  if (data.dueDate !== undefined && data.dueDate !== null && data.dueDate !== '') {
     if (typeof data.dueDate !== 'string' && !(data.dueDate instanceof Date)) {
       errors.push({
         field: 'dueDate',
@@ -526,7 +526,7 @@ export function validateUpdateTaskInput(
   }
 
   // Validate assigneeId if provided (can be non-empty string or null)
-  if (data.assigneeId !== undefined && data.assigneeId !== null) {
+  if (data.assigneeId !== undefined && data.assigneeId !== null && data.assigneeId !== '') {
     if (typeof data.assigneeId !== 'string' || data.assigneeId.trim() === '') {
       errors.push({
         field: 'assigneeId',
@@ -536,7 +536,7 @@ export function validateUpdateTaskInput(
   }
 
   // Validate dueDate if provided (can be ISO date string or null)
-  if (data.dueDate !== undefined && data.dueDate !== null) {
+  if (data.dueDate !== undefined && data.dueDate !== null && data.dueDate !== '') {
     if (typeof data.dueDate !== 'string' && !(data.dueDate instanceof Date)) {
       errors.push({
         field: 'dueDate',

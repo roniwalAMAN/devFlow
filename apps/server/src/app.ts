@@ -16,22 +16,60 @@ import aiRoutes from './routes/ai';
 /**
  * Create and configure Express application
  */
+
+/**
+ * Resolve allowed origins from CLIENT_URL (supports comma-separated list) plus localhost defaults
+ */
+export function getAllowedOrigins(): string[] {
+  const envOrigins = (process.env.CLIENT_URL || 'http://localhost:3000')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+  const defaults = ['http://localhost:3000', 'http://127.0.0.1:3000'];
+  return Array.from(new Set([...envOrigins, ...defaults]));
+}
+
 export function createApp(): Express {
   const app = express();
 
-  // Middleware
-  const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
+  // 1. Disable Express fingerprinting and trust first proxy hop (Render / Cloudflare)
+  app.disable('x-powered-by');
+  app.set('trust proxy', 1);
+
+  // 2. Production Security Headers
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '0');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    if (process.env.NODE_ENV === 'production') {
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+    next();
+  });
+
+  // 3. CORS Configuration
+  const allowedOrigins = getAllowedOrigins();
   app.use(
     cors({
-      origin: [clientUrl, 'http://localhost:3000', 'http://127.0.0.1:3000'],
+      origin: (origin, callback) => {
+        // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.includes(origin)) {
+          return callback(null, true);
+        }
+        return callback(new Error(`CORS origin not allowed: ${origin}`));
+      },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'x-refresh-token'],
     })
   );
+
+  // 4. Request Body Parsing
   app.use(express.json());
 
-  // Routes
+  // 5. Application Routes
   app.use('/api/auth', authRoutes);
   app.use('/api/organizations', organizationRoutes);
   app.use('/api/invites', inviteRoutes);
@@ -118,6 +156,39 @@ export function createApp(): Express {
       });
     }
   });
+
+  // 6. Unknown API Route 404 Handler
+  app.use('/api/*', (_req, res) => {
+    res.status(404).json({
+      success: false,
+      message: 'Endpoint not found',
+    });
+  });
+
+  // 7. Global Production Error Handler
+  app.use(
+    (
+      err: any,
+      _req: express.Request,
+      res: express.Response,
+      _next: express.NextFunction
+    ) => {
+      if (err?.message?.includes('CORS origin not allowed')) {
+        res.status(403).json({
+          success: false,
+          message: 'Forbidden. Cross-Origin request not permitted from this origin.',
+        });
+        return;
+      }
+
+      console.error('Unhandled application error:', err);
+      const isProd = process.env.NODE_ENV === 'production';
+      res.status(err.status || 500).json({
+        success: false,
+        message: isProd ? 'Internal server error' : err.message || 'Internal server error',
+      });
+    }
+  );
 
   return app;
 }

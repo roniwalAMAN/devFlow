@@ -47,6 +47,51 @@ import {
 } from '../services/cache';
 
 /**
+ * Helper to dispatch status change notifications to interested stakeholders (creator, assignee)
+ */
+async function notifyTaskStatusChange(
+  organizationId: string,
+  actorUserId: string,
+  task: { id: string; title: string; createdById: string; assigneeId?: string | null },
+  newStatus: TaskStatus,
+  oldStatus: TaskStatus
+): Promise<void> {
+  if (newStatus === oldStatus) return;
+
+  const targetUserIds = new Set<string>();
+  if (task.createdById && task.createdById !== actorUserId) {
+    targetUserIds.add(task.createdById);
+  }
+  if (task.assigneeId && task.assigneeId !== actorUserId) {
+    targetUserIds.add(task.assigneeId);
+  }
+
+  const isCompleted = newStatus === TaskStatus.DONE;
+  const notifType = isCompleted
+    ? NOTIFICATION_TYPES.TASK_COMPLETED
+    : NOTIFICATION_TYPES.TASK_STATUS_CHANGED;
+  const title = isCompleted ? 'Task completed' : 'Task status updated';
+  const message = isCompleted
+    ? `Task "${task.title}" was moved to DONE`
+    : `Task "${task.title}" status changed to ${newStatus}`;
+
+  for (const targetUserId of targetUserIds) {
+    try {
+      const notif = await createNotification({
+        userId: targetUserId,
+        organizationId,
+        type: notifType,
+        title,
+        message,
+      });
+      emitNotificationNew(targetUserId, formatNotificationResponse(notif));
+    } catch (err) {
+      console.error(`Failed to send status update notification to user ${targetUserId}:`, err);
+    }
+  }
+}
+
+/**
  * POST /api/organizations/:organizationId/projects/:projectId/tasks
  * Create a new task within a project
  */
@@ -635,25 +680,20 @@ export async function updateTaskHandler(
       }
     }
 
-    // 13. Auto-create notification if moved to DONE
-    if (
-      status === TaskStatus.DONE &&
-      existingTask.status !== TaskStatus.DONE
-    ) {
-      if (existingTask.createdById && existingTask.createdById !== req.user.userId) {
-        try {
-          const notif = await createNotification({
-            userId: existingTask.createdById,
-            organizationId,
-            type: NOTIFICATION_TYPES.TASK_COMPLETED,
-            title: 'Task completed',
-            message: `Task "${updatedTask.title}" was moved to DONE`,
-          });
-          emitNotificationNew(existingTask.createdById, formatNotificationResponse(notif));
-        } catch (err) {
-          console.error('Failed to create task completed notification:', err);
-        }
-      }
+    // 13. Auto-create notification if status changed
+    if (status !== undefined && status !== existingTask.status) {
+      await notifyTaskStatusChange(
+        organizationId,
+        req.user.userId,
+        {
+          id: updatedTask.id,
+          title: updatedTask.title,
+          createdById: existingTask.createdById,
+          assigneeId: validatedAssigneeId !== undefined ? validatedAssigneeId : existingTask.assigneeId,
+        },
+        status as TaskStatus,
+        existingTask.status as TaskStatus
+      );
     }
 
     // 14. Return HTTP 200 with formatted safe task data
@@ -931,25 +971,20 @@ export async function moveTaskHandler(
       invalidateProjectTasksCache(projectId),
     ]);
 
-    // 10. Auto-create notification if moved to DONE
-    if (
-      status === TaskStatus.DONE &&
-      existingTask.status !== TaskStatus.DONE
-    ) {
-      if (existingTask.createdById && existingTask.createdById !== req.user.userId) {
-        try {
-          const notif = await createNotification({
-            userId: existingTask.createdById,
-            organizationId,
-            type: NOTIFICATION_TYPES.TASK_COMPLETED,
-            title: 'Task completed',
-            message: `Task "${movedTask.title}" was moved to DONE`,
-          });
-          emitNotificationNew(existingTask.createdById, formatNotificationResponse(notif));
-        } catch (err) {
-          console.error('Failed to create task completed notification:', err);
-        }
-      }
+    // 10. Auto-create notification if status changed
+    if (status !== undefined && status !== existingTask.status) {
+      await notifyTaskStatusChange(
+        organizationId,
+        req.user.userId,
+        {
+          id: movedTask.id,
+          title: movedTask.title,
+          createdById: existingTask.createdById,
+          assigneeId: existingTask.assigneeId,
+        },
+        status as TaskStatus,
+        existingTask.status as TaskStatus
+      );
     }
 
     // 11. Return HTTP 200 with formatted safe task data

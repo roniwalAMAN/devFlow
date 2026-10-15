@@ -37,36 +37,10 @@ export default function GitHubHubPage() {
   const [activeTab, setActiveTab] = useState<'commits' | 'pulls' | 'issues'>('commits');
   const [isLoading, setIsLoading] = useState(true);
 
-  const orgId = currentOrg?.id || 'acme-engineering';
+  const orgId = currentOrg?.id || '';
 
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const [ghRes, projRes] = await Promise.all([
-        api.getGitHubConnection(),
-        api.listProjects(orgId),
-      ]);
-
-      if (ghRes.success && ghRes.data) {
-        setGithubUser(ghRes.data);
-      }
-
-      if (projRes.success && Array.isArray(projRes.data)) {
-        setProjects(projRes.data);
-        const linked = projRes.data.find((p) => p.githubRepoOwner && p.githubRepoName) || projRes.data[0];
-        if (linked) {
-          setSelectedProjectId(linked.id);
-          await loadRepoData(linked.id);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to load GitHub data:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [orgId]);
-
-  const loadRepoData = async (projId: string) => {
+  const loadRepoData = useCallback(async (projId: string) => {
+    if (!orgId || !projId) return;
     try {
       const [repoRes, commitsRes, pullsRes, issuesRes] = await Promise.all([
         api.getProjectRepo(orgId, projId),
@@ -82,7 +56,46 @@ export default function GitHubHubPage() {
     } catch (err) {
       console.error('Error fetching repo data:', err);
     }
-  };
+  }, [orgId]);
+
+  const loadData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const ghRes = await api.getGitHubConnection();
+      if (ghRes.success && ghRes.data) {
+        setGithubUser(ghRes.data);
+      }
+
+      if (orgId) {
+        const projRes = await api.listProjects(orgId);
+        if (projRes.success && Array.isArray(projRes.data)) {
+          setProjects(projRes.data);
+          const linked = projRes.data.find((p) => p.githubRepoOwner && p.githubRepoName) || projRes.data[0];
+          if (linked) {
+            setSelectedProjectId(linked.id);
+            await loadRepoData(linked.id);
+          } else {
+            setSelectedProjectId('');
+            setRepoDetails(null);
+            setCommits([]);
+            setPulls([]);
+            setIssues([]);
+          }
+        }
+      } else {
+        setProjects([]);
+        setSelectedProjectId('');
+        setRepoDetails(null);
+        setCommits([]);
+        setPulls([]);
+        setIssues([]);
+      }
+    } catch (err) {
+      console.error('Failed to load GitHub data:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [orgId, loadRepoData]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {

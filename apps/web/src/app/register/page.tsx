@@ -40,7 +40,7 @@ export default function RegisterPage() {
     setIsSubmitting(false);
 
     if (success) {
-      router.push('/dashboard');
+      router.push('/login');
     }
   };
 

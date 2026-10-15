@@ -202,15 +202,15 @@ export default function OrganizationDetailsPage() {
             <div className="grid grid-cols-2 gap-4 text-xs">
               <div>
                 <span className="text-zinc-500">Organization Name</span>
-                <p className="font-semibold text-white mt-0.5">{org?.name || 'DevFlow'}</p>
+                <p className="font-semibold text-white mt-0.5">{org?.name || organizationId}</p>
               </div>
               <div>
                 <span className="text-zinc-500">Workspace Slug</span>
-                <p className="font-mono text-indigo-400 mt-0.5">{org?.slug}</p>
+                <p className="font-mono text-indigo-400 mt-0.5">{org?.slug || organizationId}</p>
               </div>
               <div>
                 <span className="text-zinc-500">Your Permissions</span>
-                <p className="font-bold text-emerald-400 mt-0.5">{currentRole || 'DEVELOPER'}</p>
+                <p className="font-bold text-emerald-400 mt-0.5">{currentRole || 'MEMBER'}</p>
               </div>
               <div>
                 <span className="text-zinc-500">Active Members</span>

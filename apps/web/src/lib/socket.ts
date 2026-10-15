@@ -7,7 +7,9 @@ import { io, type Socket } from 'socket.io-client';
 let socketInstance: Socket | null = null;
 
 export const SOCKET_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  process.env.NEXT_PUBLIC_SOCKET_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://localhost:3001';
 
 /**
  * Get or create authenticated Socket.IO client instance

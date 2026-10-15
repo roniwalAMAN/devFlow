@@ -8,6 +8,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
+    "worker": "node dist/worker.js",
+    "test": "tsx test/run_suite.ts",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

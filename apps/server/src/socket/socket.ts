@@ -14,6 +14,8 @@ import {
 import { findProjectByIdAndOrg } from '../services/project';
 import { emitPresenceOnline, emitPresenceOffline } from './socketEvents';
 
+import { getAllowedOrigins } from '../app';
+
 let ioInstance: DevFlowSocketServer | null = null;
 
 // In-memory active sockets map: userId -> Set of socket IDs
@@ -46,11 +48,11 @@ export async function getOnlineUserIdsInOrganization(
  * Initialize Socket.IO server attached to the shared HTTP server
  */
 export function initializeSocket(httpServer: HTTPServer): DevFlowSocketServer {
-  const clientOrigin = process.env.CLIENT_URL || 'http://localhost:3000';
+  const allowedOrigins = getAllowedOrigins();
 
   const io: DevFlowSocketServer = new SocketIOServer(httpServer, {
     cors: {
-      origin: clientOrigin,
+      origin: allowedOrigins,
       credentials: true,
     },
   });

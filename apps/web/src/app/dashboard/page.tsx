@@ -30,7 +30,7 @@ import { Github } from '../../components/Icons';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, currentOrg, organizations, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { user, currentOrg, organizations, isAuthenticated, isLoading: authLoading, createOrganization } = useAuth();
   const { onlineUserIds } = useCollaboration();
   const { success, error } = useToast();
 
@@ -45,16 +45,27 @@ export default function DashboardPage() {
   const [isGitHubOpen, setIsGitHubOpen] = useState(false);
   const [isAuditOpen, setIsAuditOpen] = useState(false);
   const [isCreateProjOpen, setIsCreateProjOpen] = useState(false);
+  const [isCreateOrgOpen, setIsCreateOrgOpen] = useState(false);
 
   // New Project Form State
   const [newProjName, setNewProjName] = useState('');
   const [newProjDesc, setNewProjDesc] = useState('');
   const [isCreatingProj, setIsCreatingProj] = useState(false);
 
-  const orgId = currentOrg?.id || 'acme-engineering';
+  // New Organization Form State
+  const [newOrgName, setNewOrgName] = useState('');
+  const [isCreatingOrg, setIsCreatingOrg] = useState(false);
+
+  const orgId = currentOrg?.id || '';
 
   const loadDashboardData = useCallback(async () => {
-    if (!orgId) return;
+    if (!orgId) {
+      setProjects([]);
+      setTasks([]);
+      setActivity([]);
+      setIsLoadingData(false);
+      return;
+    }
     setIsLoadingData(true);
 
     try {
@@ -98,7 +109,7 @@ export default function DashboardPage() {
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newProjName.trim()) return;
+    if (!newProjName.trim() || !orgId) return;
 
     setIsCreatingProj(true);
     try {
@@ -120,6 +131,22 @@ export default function DashboardPage() {
       error(err.message || 'An error occurred.', 'Error');
     } finally {
       setIsCreatingProj(false);
+    }
+  };
+
+  const handleCreateOrganization = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newOrgName.trim()) return;
+
+    setIsCreatingOrg(true);
+    try {
+      const created = await createOrganization(newOrgName.trim());
+      if (created) {
+        setNewOrgName('');
+        setIsCreateOrgOpen(false);
+      }
+    } finally {
+      setIsCreatingOrg(false);
     }
   };
 
@@ -153,29 +180,43 @@ export default function DashboardPage() {
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <span className="rounded-md bg-indigo-500/10 px-2.5 py-0.5 text-xs font-semibold text-indigo-400 border border-indigo-500/20 font-mono">
-                  {currentOrg?.name || 'Acme Engineering'}
+                  {currentOrg?.name || 'No Active Workspace'}
                 </span>
-                <span className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
-                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                  Live Sync Active
-                </span>
+                {currentOrg && (
+                  <span className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
+                    <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                    Live Sync Active
+                  </span>
+                )}
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
                 Welcome back, {user?.name?.split(' ')[0] || 'Engineer'}
               </h1>
               <p className="mt-1 text-xs sm:text-sm text-zinc-400 max-w-2xl">
-                Real-time sprint metrics, active engineering projects, AI coding assistant, and audited workspace operations.
+                {currentOrg
+                  ? 'Real-time sprint metrics, active engineering projects, AI coding assistant, and audited workspace operations.'
+                  : 'Get started by creating an engineering organization. You will become the OWNER with full control over projects and RBAC permissions.'}
               </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2.5">
-              <button
-                onClick={() => setIsCreateProjOpen(true)}
-                className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white shadow-md shadow-indigo-600/30 hover:bg-indigo-500 transition"
-              >
-                <Plus className="h-4 w-4" />
-                <span>New Project</span>
-              </button>
+              {currentOrg ? (
+                <button
+                  onClick={() => setIsCreateProjOpen(true)}
+                  className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white shadow-md shadow-indigo-600/30 hover:bg-indigo-500 transition"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>New Project</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => setIsCreateOrgOpen(true)}
+                  className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white shadow-md shadow-indigo-600/30 hover:bg-indigo-500 transition"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Create Workspace</span>
+                </button>
+              )}
 
               <button
                 onClick={() => setIsAIOpen(true)}
@@ -239,12 +280,14 @@ export default function DashboardPage() {
                 <Layers className="h-4 w-4 text-indigo-400" />
                 <h2 className="text-base font-bold text-white">Active Projects</h2>
               </div>
-              <Link
-                href={`/organizations/${orgId}/projects`}
-                className="text-xs text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1"
-              >
-                View all projects <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
+              {orgId && (
+                <Link
+                  href={`/organizations/${orgId}/projects`}
+                  className="text-xs text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1"
+                >
+                  View all projects <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              )}
             </div>
 
             {isLoadingData ? (
@@ -252,6 +295,21 @@ export default function DashboardPage() {
                 {[1, 2].map((i) => (
                   <div key={i} className="h-36 rounded-2xl border border-zinc-800 bg-zinc-900/40 animate-pulse" />
                 ))}
+              </div>
+            ) : !orgId ? (
+              <div className="rounded-2xl border border-dashed border-zinc-800 p-8 text-center bg-zinc-900/20">
+                <Building className="mx-auto h-8 w-8 text-indigo-400 mb-2" />
+                <h3 className="text-sm font-semibold text-white">No Active Workspace</h3>
+                <p className="mt-1 text-xs text-zinc-400 max-w-sm mx-auto">
+                  Create a workspace to initialize projects, sprint backlogs, and real-time collaboration.
+                </p>
+                <button
+                  onClick={() => setIsCreateOrgOpen(true)}
+                  className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 transition shadow-md shadow-indigo-600/30"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Create Workspace</span>
+                </button>
               </div>
             ) : projects.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-zinc-800 p-8 text-center">
@@ -510,6 +568,49 @@ export default function DashboardPage() {
                   className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 transition"
                 >
                   {isCreatingProj ? 'Creating...' : 'Create Project'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Organization Modal */}
+      {isCreateOrgOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl">
+            <h3 className="text-lg font-bold text-white mb-1">Create Organization Workspace</h3>
+            <p className="text-xs text-zinc-400 mb-4">
+              Create an engineering workspace for your team. You will be assigned the OWNER role.
+            </p>
+
+            <form onSubmit={handleCreateOrganization} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-zinc-300 mb-1">Organization / Company Name</label>
+                <input
+                  type="text"
+                  value={newOrgName}
+                  onChange={(e) => setNewOrgName(e.target.value)}
+                  placeholder="e.g. Acme Corp or Core Engineering"
+                  required
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3.5 py-2 text-xs text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateOrgOpen(false)}
+                  className="rounded-xl px-4 py-2 text-xs font-medium text-zinc-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingOrg || !newOrgName.trim()}
+                  className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 transition shadow-md shadow-indigo-600/30"
+                >
+                  {isCreatingOrg ? 'Creating...' : 'Create Workspace'}
                 </button>
               </div>
             </form>

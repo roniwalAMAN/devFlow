@@ -44,6 +44,9 @@ let analyticsWorker: Worker | null = null;
  * Initialize background workers
  */
 export function initWorkers(): void {
+  if (notificationWorker) {
+    return; // Workers already initialized
+  }
   try {
     // 1. Notification Worker
     notificationWorker = new Worker(
@@ -180,4 +183,8 @@ export async function closeWorkers(): Promise<void> {
       }
     }
   }
+  notificationWorker = null;
+  githubWorker = null;
+  aiWorker = null;
+  analyticsWorker = null;
 }

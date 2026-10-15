@@ -28,6 +28,7 @@ export default function ProjectTasksTableView() {
   const {
     tasks,
     fetchTasks,
+    createTask,
     updateTask,
     deleteTask,
     setActiveOrgId,
@@ -44,11 +45,19 @@ export default function ProjectTasksTableView() {
   // Task Comments / Detail Modal
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
+  // Create Task Modal State
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newDescription, setNewDescription] = useState('');
+  const [newStatus, setNewStatus] = useState<Task['status']>('TODO');
+  const [newPriority, setNewPriority] = useState<Task['priority']>('MEDIUM');
+  const [isCreating, setIsCreating] = useState(false);
+
   useEffect(() => {
     if (organizationId && projectId) {
       setActiveOrgId(organizationId);
       setActiveProjectId(projectId);
-      fetchTasks();
+      fetchTasks(organizationId, projectId);
     }
   }, [organizationId, projectId, setActiveOrgId, setActiveProjectId, fetchTasks]);
 
@@ -72,13 +81,41 @@ export default function ProjectTasksTableView() {
     });
   }, [tasks, searchQuery, statusFilter, priorityFilter]);
 
-  const handleStatusChange = async (taskId: string, newStatus: Task['status']) => {
-    await updateTask(taskId, { status: newStatus });
+  const handleStatusChange = async (taskId: string, newStatusVal: Task['status']) => {
+    await updateTask(taskId, { status: newStatusVal }, organizationId, projectId);
   };
 
   const handleDelete = async (taskId: string, title: string) => {
     if (confirm(`Delete task "${title}"?`)) {
-      await deleteTask(taskId);
+      await deleteTask(taskId, organizationId, projectId);
+    }
+  };
+
+  const handleCreateTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTitle.trim() || isCreating) return;
+
+    setIsCreating(true);
+    try {
+      const created = await createTask(
+        {
+          title: newTitle.trim(),
+          description: newDescription.trim() || null,
+          status: newStatus,
+          priority: newPriority,
+        },
+        organizationId,
+        projectId
+      );
+      if (created) {
+        setIsCreateModalOpen(false);
+        setNewTitle('');
+        setNewDescription('');
+        setNewStatus('TODO');
+        setNewPriority('MEDIUM');
+      }
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -113,6 +150,14 @@ export default function ProjectTasksTableView() {
           </div>
 
           <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => setIsCreateModalOpen(true)}
+              className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white shadow-md shadow-indigo-600/30 hover:bg-indigo-500 transition"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Create Task</span>
+            </button>
+
             <Link
               href={`/organizations/${organizationId}/projects/${projectId}`}
               className="flex items-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-900 px-3.5 py-2 text-xs font-medium text-zinc-300 hover:bg-zinc-800 hover:text-white transition shadow-sm"
@@ -293,6 +338,89 @@ export default function ProjectTasksTableView() {
           isOpen={!!selectedTask}
           onClose={() => setSelectedTask(null)}
         />
+      )}
+
+      {/* Create Task Modal */}
+      {isCreateModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl">
+            <h3 className="text-base font-semibold text-zinc-100">
+              Create New Task
+            </h3>
+
+            <form onSubmit={handleCreateTask} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">Task Title</label>
+                <input
+                  type="text"
+                  required
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  placeholder="e.g. Implement WebRTC audio calling"
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-900 p-2.5 text-xs text-zinc-200 focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">Description</label>
+                <textarea
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  placeholder="Describe the task requirements and scope..."
+                  rows={3}
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-900 p-2.5 text-xs text-zinc-200 focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1">Status</label>
+                  <select
+                    value={newStatus}
+                    onChange={(e) => setNewStatus(e.target.value as Task['status'])}
+                    className="w-full rounded-xl border border-zinc-800 bg-zinc-900 p-2.5 text-xs text-zinc-200 focus:border-indigo-500 focus:outline-none"
+                  >
+                    <option value="TODO">To Do</option>
+                    <option value="IN_PROGRESS">In Progress</option>
+                    <option value="IN_REVIEW">In Review</option>
+                    <option value="DONE">Done</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1">Priority</label>
+                  <select
+                    value={newPriority}
+                    onChange={(e) => setNewPriority(e.target.value as Task['priority'])}
+                    className="w-full rounded-xl border border-zinc-800 bg-zinc-900 p-2.5 text-xs text-zinc-200 focus:border-indigo-500 focus:outline-none"
+                  >
+                    <option value="LOW">Low</option>
+                    <option value="MEDIUM">Medium</option>
+                    <option value="HIGH">High</option>
+                    <option value="URGENT">Urgent</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateModalOpen(false)}
+                  className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2 text-xs font-medium text-zinc-300 hover:bg-zinc-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!newTitle.trim() || isCreating}
+                  className="rounded-xl bg-indigo-600 px-5 py-2 text-xs font-semibold text-white shadow-md shadow-indigo-600/30 hover:bg-indigo-500 disabled:opacity-50"
+                >
+                  {isCreating ? 'Creating...' : 'Create Task'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -46,7 +46,7 @@ export default function ProjectKanbanPage() {
     if (organizationId && projectId) {
       setActiveOrgId(organizationId);
       setActiveProjectId(projectId);
-      fetchTasks();
+      fetchTasks(organizationId, projectId);
 
       // Load project details
       api.getProject(organizationId, projectId).then((res) => {

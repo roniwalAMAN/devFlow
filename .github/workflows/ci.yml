@@ -84,9 +84,17 @@ jobs:
         env:
           DATABASE_URL: postgresql://devflow:devflow_secret@localhost:5432/devflow_test?schema=public
 
-      - name: TypeScript Typecheck (Server & Web)
-        run: |
-          pnpm --filter @devflow/server type-check
+      - name: TypeScript Typecheck (All Packages)
+        run: pnpm type-check
+
+      - name: Run Integration & Regression Test Suite
+        run: pnpm test
+        env:
+          DATABASE_URL: postgresql://devflow:devflow_secret@localhost:5432/devflow_test?schema=public
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: devflow-super-secret-jwt-key-for-local-dev-min-32-chars
+          JWT_REFRESH_SECRET: devflow-super-secret-jwt-refresh-key-local-32-chars
+          ENCRYPTION_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 
       - name: Build Database & Shared Packages
         run: |

@@ -147,7 +147,7 @@ export default function LoginPage() {
 
         {/* Footer Navigation */}
         <p className="text-center text-xs text-zinc-500">
-          Don't have a DevFlow account?{' '}
+          Don&apos;t have a DevFlow account?{' '}
           <Link href="/register" className="text-indigo-400 hover:text-indigo-300 font-semibold underline underline-offset-4">
             Create an organization
           </Link>

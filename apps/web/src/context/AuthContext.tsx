@@ -34,6 +34,7 @@ interface AuthContextType {
   quickLogin: (email: string) => Promise<boolean>;
   logout: () => Promise<void>;
   switchOrganization: (orgId: string) => void;
+  createOrganization: (name: string) => Promise<OrganizationSummary | null>;
   refreshUser: () => Promise<void>;
   refreshOrganizations: () => Promise<void>;
 }
@@ -55,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       setOrganizations([]);
       setCurrentOrg(null);
+      setCurrentRole(null);
       setIsLoading(false);
       return;
     }
@@ -70,6 +72,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         tokenStorage.clearTokens();
         setUser(null);
+        setOrganizations([]);
+        setCurrentOrg(null);
+        setCurrentRole(null);
         setIsLoading(false);
         return;
       }
@@ -77,14 +82,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (orgsRes.success && Array.isArray(orgsRes.data)) {
         setOrganizations(orgsRes.data);
 
-        // Restore active organization or select first
-        const savedOrgId = typeof window !== 'undefined' ? localStorage.getItem('devflow_current_org') : null;
-        const matched = orgsRes.data.find((o: OrganizationSummary) => o.id === savedOrgId) || orgsRes.data[0];
+        if (orgsRes.data.length > 0) {
+          const savedOrgId = typeof window !== 'undefined' ? localStorage.getItem('devflow_current_org') : null;
+          const matched = orgsRes.data.find((o: OrganizationSummary) => o.id === savedOrgId) || orgsRes.data[0];
 
-        if (matched) {
-          setCurrentOrg(matched);
-          setCurrentRole(matched.role || 'DEVELOPER');
+          if (matched) {
+            setCurrentOrg(matched);
+            setCurrentRole(matched.role || null);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('devflow_current_org', matched.id);
+            }
+          }
+        } else {
+          setCurrentOrg(null);
+          setCurrentRole(null);
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('devflow_current_org');
+          }
         }
+      } else {
+        setOrganizations([]);
+        setCurrentOrg(null);
+        setCurrentRole(null);
       }
     } catch (err) {
       console.error('Auth initialization error:', err);
@@ -123,11 +142,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     try {
       const res = await api.register({ name, email, password });
-      if (res.success && res.data?.accessToken) {
-        tokenStorage.setTokens(res.data.accessToken, res.data.refreshToken);
-        setUser(res.data.user);
-        success('Account created successfully!', 'Welcome to DevFlow');
-        await loadUserData();
+      if (res.success) {
+        success(res.message || 'Account created successfully!', 'Welcome to DevFlow');
         return true;
       } else {
         error(res.message || 'Registration failed. Please check your inputs.', 'Signup Error');
@@ -167,11 +183,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const org = organizations.find((o) => o.id === orgId);
     if (org) {
       setCurrentOrg(org);
-      setCurrentRole(org.role || 'DEVELOPER');
+      setCurrentRole(org.role || null);
       if (typeof window !== 'undefined') {
         localStorage.setItem('devflow_current_org', orgId);
       }
       success(`Switched workspace to ${org.name}`);
+    }
+  };
+
+  const createOrganization = async (name: string): Promise<OrganizationSummary | null> => {
+    setIsLoading(true);
+    try {
+      const res = await api.createOrganization({ name });
+      if (res.success && res.data) {
+        success(`Organization "${res.data.name}" created successfully!`, 'Workspace Created');
+        await loadUserData();
+        setCurrentOrg(res.data);
+        setCurrentRole(res.data.role || 'OWNER');
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('devflow_current_org', res.data.id);
+        }
+        return res.data;
+      } else {
+        error(res.message || 'Failed to create organization.', 'Error');
+        return null;
+      }
+    } catch (err: any) {
+      error(err.message || 'An error occurred.', 'Error');
+      return null;
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -186,11 +227,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const res = await api.listOrganizations();
     if (res.success && Array.isArray(res.data)) {
       setOrganizations(res.data);
-      if (currentOrg) {
-        const updated = res.data.find((o: OrganizationSummary) => o.id === currentOrg.id);
-        if (updated) {
-          setCurrentOrg(updated);
-          setCurrentRole(updated.role || 'DEVELOPER');
+      if (res.data.length === 0) {
+        setCurrentOrg(null);
+        setCurrentRole(null);
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('devflow_current_org');
+        }
+      } else {
+        const savedOrgId = typeof window !== 'undefined' ? localStorage.getItem('devflow_current_org') : null;
+        const matched =
+          (currentOrg ? res.data.find((o: OrganizationSummary) => o.id === currentOrg.id) : null) ||
+          res.data.find((o: OrganizationSummary) => o.id === savedOrgId) ||
+          res.data[0];
+
+        if (matched) {
+          setCurrentOrg(matched);
+          setCurrentRole(matched.role || null);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('devflow_current_org', matched.id);
+          }
         }
       }
     }
@@ -210,6 +265,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         quickLogin,
         logout,
         switchOrganization,
+        createOrganization,
         refreshUser,
         refreshOrganizations,
       }}

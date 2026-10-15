@@ -16,6 +16,7 @@ import React, {
 import type { Socket } from 'socket.io-client';
 import { getSocket, SOCKET_URL } from '../lib/socket';
 import { tokenStorage } from '../lib/api';
+import { useAuth } from './AuthContext';
 
 export interface SafeUser {
   id: string;
@@ -90,11 +91,11 @@ interface CollaborationContextType {
   unreadNotificationsCount: number;
   onlineUserIds: string[];
   // Actions
-  fetchTasks: () => Promise<void>;
-  createTask: (data: Partial<Task>) => Promise<Task | null>;
-  updateTask: (taskId: string, data: Partial<Task>) => Promise<Task | null>;
-  moveTask: (taskId: string, status: Task['status'], position: number) => Promise<void>;
-  deleteTask: (taskId: string) => Promise<boolean>;
+  fetchTasks: (targetOrgId?: string, targetProjId?: string) => Promise<void>;
+  createTask: (data: Partial<Task>, targetOrgId?: string, targetProjId?: string) => Promise<Task | null>;
+  updateTask: (taskId: string, data: Partial<Task>, targetOrgId?: string, targetProjId?: string) => Promise<Task | null>;
+  moveTask: (taskId: string, status: Task['status'], position: number, targetOrgId?: string, targetProjId?: string) => Promise<void>;
+  deleteTask: (taskId: string, targetOrgId?: string, targetProjId?: string) => Promise<boolean>;
   fetchComments: (taskId: string) => Promise<void>;
   addComment: (taskId: string, content: string) => Promise<Comment | null>;
   updateComment: (taskId: string, commentId: string, content: string) => Promise<Comment | null>;
@@ -109,11 +110,22 @@ interface CollaborationContextType {
 const CollaborationContext = createContext<CollaborationContextType | undefined>(undefined);
 
 export function CollaborationProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(null);
+  const { user } = useAuth();
+  const [token, setToken] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return tokenStorage.getAccessToken();
+    }
+    return null;
+  });
   const [currentUser, setCurrentUser] = useState<SafeUser | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [activeOrgId, setActiveOrgId] = useState<string>('org-default');
-  const [activeProjectId, setActiveProjectId] = useState<string>('proj-default');
+  const [activeOrgId, setActiveOrgId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('devflow_current_org') || '';
+    }
+    return '';
+  });
+  const [activeProjectId, setActiveProjectId] = useState<string>('');
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [comments, setComments] = useState<Record<string, Comment[]>>({});
@@ -122,39 +134,84 @@ export function CollaborationProvider({ children }: { children: React.ReactNode 
   const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
 
   const socketRef = useRef<Socket | null>(null);
+  const activeOrgIdRef = useRef<string>(activeOrgId);
+  const activeProjectIdRef = useRef<string>(activeProjectId);
 
-  // Initialize stored token on client mount
+  // Keep refs in sync to avoid stale closures in socket event handlers
+  useEffect(() => {
+    activeOrgIdRef.current = activeOrgId;
+  }, [activeOrgId]);
+
+  useEffect(() => {
+    activeProjectIdRef.current = activeProjectId;
+  }, [activeProjectId]);
+
+  const fetchNotifications = useCallback(async () => {
+    const authToken = tokenStorage.getAccessToken() || token;
+    if (!authToken) return;
+    try {
+      const res = await fetch(`${SOCKET_URL}/api/notifications`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        setNotifications(data.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch notifications:', err);
+    }
+  }, [token]);
+
+  // Sync current authenticated user
+  useEffect(() => {
+    if (user) {
+      setCurrentUser({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar || null,
+      });
+      const savedToken = tokenStorage.getAccessToken();
+      if (savedToken) {
+        setToken(savedToken);
+      }
+      fetchNotifications();
+    } else {
+      setCurrentUser(null);
+      setNotifications([]);
+    }
+  }, [user, fetchNotifications]);
+
+  // Fetch initial notifications on mount if token is present
   useEffect(() => {
     const savedToken = tokenStorage.getAccessToken();
     if (savedToken) {
-      setToken(savedToken);
+      fetchNotifications();
     }
-    const savedOrg = typeof window !== 'undefined' ? localStorage.getItem('devflow_current_org') : null;
-    if (savedOrg) {
-      setActiveOrgId(savedOrg);
-    }
-  }, []);
+  }, [fetchNotifications]);
 
   // Initialize socket when token changes
   useEffect(() => {
-    if (!token) {
+    const effectiveToken = token || tokenStorage.getAccessToken();
+    if (!effectiveToken) {
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
       }
-      setIsConnected(false);
       return;
     }
 
-    const socket = getSocket(token);
+    const socket = getSocket(effectiveToken);
     socketRef.current = socket;
     socket.connect();
 
     socket.on('connect', () => {
       setIsConnected(true);
+      fetchNotifications();
       // Join active organization room
-      if (activeOrgId) {
-        socket.emit('join:organization', { organizationId: activeOrgId }, (res: any) => {
+      const currentOrg = activeOrgIdRef.current;
+      if (currentOrg) {
+        socket.emit('join:organization', { organizationId: currentOrg }, (res: any) => {
           if (res?.success && Array.isArray(res.onlineUserIds)) {
             setOnlineUserIds(res.onlineUserIds);
           }
@@ -168,7 +225,7 @@ export function CollaborationProvider({ children }: { children: React.ReactNode 
 
     // Real-time task events
     socket.on('task:created', (payload: { organizationId: string; projectId: string; task: Task }) => {
-      if (payload.projectId === activeProjectId) {
+      if (payload.projectId === activeProjectIdRef.current) {
         setTasks((prev) => {
           if (prev.some((t) => t.id === payload.task.id)) return prev;
           return [...prev, payload.task];
@@ -177,7 +234,7 @@ export function CollaborationProvider({ children }: { children: React.ReactNode 
     });
 
     socket.on('task:updated', (payload: { organizationId: string; projectId: string; task: Task }) => {
-      if (payload.projectId === activeProjectId) {
+      if (payload.projectId === activeProjectIdRef.current) {
         setTasks((prev) =>
           prev.map((t) => (t.id === payload.task.id ? payload.task : t))
         );
@@ -185,7 +242,7 @@ export function CollaborationProvider({ children }: { children: React.ReactNode 
     });
 
     socket.on('task:moved', (payload: { organizationId: string; projectId: string; task: Task; affectedTaskIds?: string[] }) => {
-      if (payload.projectId === activeProjectId) {
+      if (payload.projectId === activeProjectIdRef.current) {
         setTasks((prev) =>
           prev.map((t) => (t.id === payload.task.id ? { ...t, status: payload.task.status, position: payload.task.position } : t))
         );
@@ -222,7 +279,7 @@ export function CollaborationProvider({ children }: { children: React.ReactNode 
 
     // Real-time team chat
     socket.on('chat:message', (payload: { organizationId: string; message: ChatMessage }) => {
-      if (payload.organizationId === activeOrgId) {
+      if (payload.organizationId === activeOrgIdRef.current) {
         setChatMessages((prev) => {
           if (prev.some((m) => m.id === payload.message.id)) return prev;
           return [...prev, payload.message];
@@ -232,7 +289,10 @@ export function CollaborationProvider({ children }: { children: React.ReactNode 
 
     // Real-time notifications
     socket.on('notification:new', (payload: { notification: NotificationItem }) => {
-      setNotifications((prev) => [payload.notification, ...prev]);
+      setNotifications((prev) => [
+        payload.notification,
+        ...prev.filter((n) => n.id !== payload.notification.id),
+      ]);
     });
 
     socket.on('notification:read', (payload: { notificationId: string; readAt: string }) => {
@@ -249,13 +309,13 @@ export function CollaborationProvider({ children }: { children: React.ReactNode 
 
     // Real-time presence
     socket.on('presence:online', (payload: { userId: string; organizationId: string }) => {
-      if (payload.organizationId === activeOrgId) {
+      if (payload.organizationId === activeOrgIdRef.current) {
         setOnlineUserIds((prev) => Array.from(new Set([...prev, payload.userId])));
       }
     });
 
     socket.on('presence:offline', (payload: { userId: string; organizationId: string }) => {
-      if (payload.organizationId === activeOrgId) {
+      if (payload.organizationId === activeOrgIdRef.current) {
         setOnlineUserIds((prev) => prev.filter((id) => id !== payload.userId));
       }
     });
@@ -277,7 +337,7 @@ export function CollaborationProvider({ children }: { children: React.ReactNode 
       socket.off('presence:online');
       socket.off('presence:offline');
     };
-  }, [token, activeOrgId, activeProjectId]);
+  }, [token]);
 
   // Re-join org room if activeOrgId changes
   useEffect(() => {
@@ -291,39 +351,49 @@ export function CollaborationProvider({ children }: { children: React.ReactNode 
   }, [activeOrgId, isConnected]);
 
   // REST API Helpers
-  const fetchTasks = useCallback(async () => {
-    if (!token || !activeOrgId || !activeProjectId) return;
+  const fetchTasks = useCallback(async (targetOrgId?: string, targetProjId?: string) => {
+    const orgId = targetOrgId || activeOrgIdRef.current;
+    const projId = targetProjId || activeProjectIdRef.current;
+    const authToken = tokenStorage.getAccessToken() || token;
+    if (!authToken || !orgId || !projId) return;
     try {
       const res = await fetch(
-        `${SOCKET_URL}/api/organizations/${activeOrgId}/projects/${activeProjectId}/tasks`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        `${SOCKET_URL}/api/organizations/${orgId}/projects/${projId}/tasks`,
+        { headers: { Authorization: `Bearer ${authToken}` } }
       );
       const data = await res.json();
-      if (data.success) {
+      if (data.success && Array.isArray(data.data)) {
         setTasks(data.data);
       }
     } catch (err) {
       console.error('Failed to fetch tasks:', err);
     }
-  }, [token, activeOrgId, activeProjectId]);
+  }, [token]);
 
   const createTask = useCallback(
-    async (taskData: Partial<Task>): Promise<Task | null> => {
-      if (!token || !activeOrgId || !activeProjectId) return null;
+    async (taskData: Partial<Task>, targetOrgId?: string, targetProjId?: string): Promise<Task | null> => {
+      const orgId = targetOrgId || activeOrgIdRef.current;
+      const projId = targetProjId || activeProjectIdRef.current;
+      const authToken = tokenStorage.getAccessToken() || token;
+      if (!authToken || !orgId || !projId) return null;
       try {
         const res = await fetch(
-          `${SOCKET_URL}/api/organizations/${activeOrgId}/projects/${activeProjectId}/tasks`,
+          `${SOCKET_URL}/api/organizations/${orgId}/projects/${projId}/tasks`,
           {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
+              Authorization: `Bearer ${authToken}`,
             },
             body: JSON.stringify(taskData),
           }
         );
         const data = await res.json();
-        if (data.success) {
+        if (data.success && data.data) {
+          setTasks((prev) => {
+            if (prev.some((t) => t.id === data.data.id)) return prev;
+            return [...prev, data.data];
+          });
           return data.data;
         }
       } catch (err) {
@@ -331,26 +401,32 @@ export function CollaborationProvider({ children }: { children: React.ReactNode 
       }
       return null;
     },
-    [token, activeOrgId, activeProjectId]
+    [token]
   );
 
   const updateTask = useCallback(
-    async (taskId: string, updateData: Partial<Task>): Promise<Task | null> => {
-      if (!token || !activeOrgId || !activeProjectId) return null;
+    async (taskId: string, updateData: Partial<Task>, targetOrgId?: string, targetProjId?: string): Promise<Task | null> => {
+      const orgId = targetOrgId || activeOrgIdRef.current;
+      const projId = targetProjId || activeProjectIdRef.current;
+      const authToken = tokenStorage.getAccessToken() || token;
+      if (!authToken || !orgId || !projId) return null;
       try {
         const res = await fetch(
-          `${SOCKET_URL}/api/organizations/${activeOrgId}/projects/${activeProjectId}/tasks/${taskId}`,
+          `${SOCKET_URL}/api/organizations/${orgId}/projects/${projId}/tasks/${taskId}`,
           {
             method: 'PATCH',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
+              Authorization: `Bearer ${authToken}`,
             },
             body: JSON.stringify(updateData),
           }
         );
         const data = await res.json();
-        if (data.success) {
+        if (data.success && data.data) {
+          setTasks((prev) =>
+            prev.map((t) => (t.id === data.data.id ? data.data : t))
+          );
           return data.data;
         }
       } catch (err) {
@@ -358,59 +434,81 @@ export function CollaborationProvider({ children }: { children: React.ReactNode 
       }
       return null;
     },
-    [token, activeOrgId, activeProjectId]
+    [token]
   );
 
   const moveTask = useCallback(
-    async (taskId: string, status: Task['status'], position: number): Promise<void> => {
-      if (!token || !activeOrgId || !activeProjectId) return;
+    async (taskId: string, status: Task['status'], position: number, targetOrgId?: string, targetProjId?: string): Promise<void> => {
+      const orgId = targetOrgId || activeOrgIdRef.current;
+      const projId = targetProjId || activeProjectIdRef.current;
+      const authToken = tokenStorage.getAccessToken() || token;
+      if (!authToken || !orgId || !projId) return;
+      // Optimistic update
+      setTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, status, position } : t))
+      );
       try {
-        await fetch(
-          `${SOCKET_URL}/api/organizations/${activeOrgId}/projects/${activeProjectId}/tasks/${taskId}/move`,
+        const res = await fetch(
+          `${SOCKET_URL}/api/organizations/${orgId}/projects/${projId}/tasks/${taskId}/move`,
           {
             method: 'PATCH',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
+              Authorization: `Bearer ${authToken}`,
             },
             body: JSON.stringify({ status, position }),
           }
         );
+        const data = await res.json();
+        if (data.success && data.data) {
+          setTasks((prev) =>
+            prev.map((t) => (t.id === data.data.id ? data.data : t))
+          );
+        }
       } catch (err) {
         console.error('Failed to move task:', err);
       }
     },
-    [token, activeOrgId, activeProjectId]
+    [token]
   );
 
   const deleteTask = useCallback(
-    async (taskId: string): Promise<boolean> => {
-      if (!token || !activeOrgId || !activeProjectId) return false;
+    async (taskId: string, targetOrgId?: string, targetProjId?: string): Promise<boolean> => {
+      const orgId = targetOrgId || activeOrgIdRef.current;
+      const projId = targetProjId || activeProjectIdRef.current;
+      const authToken = tokenStorage.getAccessToken() || token;
+      if (!authToken || !orgId || !projId) return false;
       try {
         const res = await fetch(
-          `${SOCKET_URL}/api/organizations/${activeOrgId}/projects/${activeProjectId}/tasks/${taskId}`,
+          `${SOCKET_URL}/api/organizations/${orgId}/projects/${projId}/tasks/${taskId}`,
           {
             method: 'DELETE',
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { Authorization: `Bearer ${authToken}` },
           }
         );
         const data = await res.json();
-        return !!data.success;
+        if (data.success) {
+          setTasks((prev) => prev.filter((t) => t.id !== taskId));
+          return true;
+        }
       } catch (err) {
         console.error('Failed to delete task:', err);
-        return false;
       }
+      return false;
     },
-    [token, activeOrgId, activeProjectId]
+    [token]
   );
 
   const fetchComments = useCallback(
     async (taskId: string) => {
-      if (!token || !activeOrgId || !activeProjectId) return;
+      const orgId = activeOrgIdRef.current;
+      const projId = activeProjectIdRef.current;
+      const authToken = tokenStorage.getAccessToken() || token;
+      if (!authToken || !orgId || !projId) return;
       try {
         const res = await fetch(
-          `${SOCKET_URL}/api/organizations/${activeOrgId}/projects/${activeProjectId}/tasks/${taskId}/comments`,
-          { headers: { Authorization: `Bearer ${token}` } }
+          `${SOCKET_URL}/api/organizations/${orgId}/projects/${projId}/tasks/${taskId}/comments`,
+          { headers: { Authorization: `Bearer ${authToken}` } }
         );
         const data = await res.json();
         if (data.success) {
@@ -420,26 +518,33 @@ export function CollaborationProvider({ children }: { children: React.ReactNode 
         console.error('Failed to fetch comments:', err);
       }
     },
-    [token, activeOrgId, activeProjectId]
+    [token]
   );
 
   const addComment = useCallback(
     async (taskId: string, content: string): Promise<Comment | null> => {
-      if (!token || !activeOrgId || !activeProjectId) return null;
+      const orgId = activeOrgIdRef.current;
+      const projId = activeProjectIdRef.current;
+      const authToken = tokenStorage.getAccessToken() || token;
+      if (!authToken || !orgId || !projId) return null;
       try {
         const res = await fetch(
-          `${SOCKET_URL}/api/organizations/${activeOrgId}/projects/${activeProjectId}/tasks/${taskId}/comments`,
+          `${SOCKET_URL}/api/organizations/${orgId}/projects/${projId}/tasks/${taskId}/comments`,
           {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
+              Authorization: `Bearer ${authToken}`,
             },
             body: JSON.stringify({ content }),
           }
         );
         const data = await res.json();
-        if (data.success) {
+        if (data.success && data.data) {
+          setComments((prev) => ({
+            ...prev,
+            [taskId]: [...(prev[taskId] || []), data.data],
+          }));
           return data.data;
         }
       } catch (err) {
@@ -447,26 +552,33 @@ export function CollaborationProvider({ children }: { children: React.ReactNode 
       }
       return null;
     },
-    [token, activeOrgId, activeProjectId]
+    [token]
   );
 
   const updateComment = useCallback(
     async (taskId: string, commentId: string, content: string): Promise<Comment | null> => {
-      if (!token || !activeOrgId || !activeProjectId) return null;
+      const orgId = activeOrgIdRef.current;
+      const projId = activeProjectIdRef.current;
+      const authToken = tokenStorage.getAccessToken() || token;
+      if (!authToken || !orgId || !projId) return null;
       try {
         const res = await fetch(
-          `${SOCKET_URL}/api/organizations/${activeOrgId}/projects/${activeProjectId}/tasks/${taskId}/comments/${commentId}`,
+          `${SOCKET_URL}/api/organizations/${orgId}/projects/${projId}/tasks/${taskId}/comments/${commentId}`,
           {
             method: 'PATCH',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
+              Authorization: `Bearer ${authToken}`,
             },
             body: JSON.stringify({ content }),
           }
         );
         const data = await res.json();
-        if (data.success) {
+        if (data.success && data.data) {
+          setComments((prev) => ({
+            ...prev,
+            [taskId]: (prev[taskId] || []).map((c) => (c.id === commentId ? data.data : c)),
+          }));
           return data.data;
         }
       } catch (err) {
@@ -474,63 +586,80 @@ export function CollaborationProvider({ children }: { children: React.ReactNode 
       }
       return null;
     },
-    [token, activeOrgId, activeProjectId]
+    [token]
   );
 
   const deleteComment = useCallback(
     async (taskId: string, commentId: string): Promise<boolean> => {
-      if (!token || !activeOrgId || !activeProjectId) return false;
+      const orgId = activeOrgIdRef.current;
+      const projId = activeProjectIdRef.current;
+      const authToken = tokenStorage.getAccessToken() || token;
+      if (!authToken || !orgId || !projId) return false;
       try {
         const res = await fetch(
-          `${SOCKET_URL}/api/organizations/${activeOrgId}/projects/${activeProjectId}/tasks/${taskId}/comments/${commentId}`,
+          `${SOCKET_URL}/api/organizations/${orgId}/projects/${projId}/tasks/${taskId}/comments/${commentId}`,
           {
             method: 'DELETE',
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { Authorization: `Bearer ${authToken}` },
           }
         );
         const data = await res.json();
-        return !!data.success;
+        if (data.success) {
+          setComments((prev) => ({
+            ...prev,
+            [taskId]: (prev[taskId] || []).filter((c) => c.id !== commentId),
+          }));
+          return true;
+        }
       } catch (err) {
         console.error('Failed to delete comment:', err);
-        return false;
       }
+      return false;
     },
-    [token, activeOrgId, activeProjectId]
+    [token]
   );
 
   const fetchChatMessages = useCallback(async () => {
-    if (!token || !activeOrgId) return;
+    const orgId = activeOrgIdRef.current;
+    const authToken = tokenStorage.getAccessToken() || token;
+    if (!authToken || !orgId) return;
     try {
       const res = await fetch(
-        `${SOCKET_URL}/api/organizations/${activeOrgId}/chat/messages`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        `${SOCKET_URL}/api/organizations/${orgId}/chat/messages`,
+        { headers: { Authorization: `Bearer ${authToken}` } }
       );
       const data = await res.json();
-      if (data.success) {
+      if (data.success && Array.isArray(data.data)) {
         setChatMessages(data.data);
       }
     } catch (err) {
       console.error('Failed to fetch chat messages:', err);
     }
-  }, [token, activeOrgId]);
+  }, [token]);
 
   const sendChatMessage = useCallback(
     async (content: string): Promise<ChatMessage | null> => {
-      if (!token || !activeOrgId) return null;
+      const orgId = activeOrgIdRef.current;
+      const authToken = tokenStorage.getAccessToken() || token;
+      if (!authToken || !orgId) return null;
       try {
         const res = await fetch(
-          `${SOCKET_URL}/api/organizations/${activeOrgId}/chat/messages`,
+          `${SOCKET_URL}/api/organizations/${orgId}/chat/messages`,
           {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
+              Authorization: `Bearer ${authToken}`,
             },
             body: JSON.stringify({ content }),
           }
         );
         const data = await res.json();
-        if (data.success) {
+        if (data.success && data.data) {
+          setChatMessages((prev) => {
+            if (prev.some((m) => m.id === data.data.id)) return prev;
+            return [...prev, data.data];
+          });
           return data.data;
         }
       } catch (err) {
@@ -538,32 +667,21 @@ export function CollaborationProvider({ children }: { children: React.ReactNode 
       }
       return null;
     },
-    [token, activeOrgId]
+    [token]
   );
-
-  const fetchNotifications = useCallback(async () => {
-    if (!token) return;
-    try {
-      const res = await fetch(`${SOCKET_URL}/api/notifications`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data.success) {
-        setNotifications(data.data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch notifications:', err);
-    }
-  }, [token]);
 
   const markNotificationAsRead = useCallback(
     async (notificationId: string) => {
-      if (!token) return;
+      const authToken = tokenStorage.getAccessToken() || token;
+      if (!authToken) return;
       try {
         await fetch(`${SOCKET_URL}/api/notifications/${notificationId}/read`, {
           method: 'PATCH',
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${authToken}` },
         });
+        setNotifications((prev) =>
+          prev.map((n) => (n.id === notificationId ? { ...n, readAt: new Date().toISOString() } : n))
+        );
       } catch (err) {
         console.error('Failed to mark notification read:', err);
       }
@@ -572,12 +690,16 @@ export function CollaborationProvider({ children }: { children: React.ReactNode 
   );
 
   const markAllNotificationsAsRead = useCallback(async () => {
-    if (!token) return;
+    const authToken = tokenStorage.getAccessToken() || token;
+    if (!authToken) return;
     try {
       await fetch(`${SOCKET_URL}/api/notifications/read-all`, {
         method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${authToken}` },
       });
+      setNotifications((prev) =>
+        prev.map((n) => ({ ...n, readAt: new Date().toISOString() }))
+      );
     } catch (err) {
       console.error('Failed to mark all notifications read:', err);
     }

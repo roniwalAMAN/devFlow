@@ -88,9 +88,11 @@ export default function SettingsPage() {
               <User className="h-4 w-4 text-indigo-400" />
               Developer Profile
             </h2>
-            <span className="rounded-full bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-0.5 text-xs text-indigo-300 font-mono">
-              {currentRole || 'DEVELOPER'}
-            </span>
+            {currentRole && (
+              <span className="rounded-full bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-0.5 text-xs text-indigo-300 font-mono">
+                {currentRole}
+              </span>
+            )}
           </div>
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
@@ -98,13 +100,13 @@ export default function SettingsPage() {
               <img src={user.avatar} alt={user.name} className="h-16 w-16 rounded-2xl object-cover border border-zinc-700" />
             ) : (
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-600 text-xl font-bold text-white">
-                {user?.name ? user.name[0].toUpperCase() : 'U'}
+                {user?.name ? user.name[0].toUpperCase() : user?.email ? user.email[0].toUpperCase() : 'U'}
               </div>
             )}
 
             <div className="space-y-1">
-              <div className="text-base font-bold text-white">{user?.name || 'Engineer'}</div>
-              <div className="text-xs text-zinc-400">{user?.email || 'developer@devflow.io'}</div>
+              <div className="text-base font-bold text-white">{user?.name || 'User'}</div>
+              <div className="text-xs text-zinc-400">{user?.email || ''}</div>
               <div className="text-[11px] text-zinc-500 font-mono">User ID: {user?.id}</div>
             </div>
           </div>
@@ -117,23 +119,29 @@ export default function SettingsPage() {
               <Building className="h-4 w-4 text-indigo-400" />
               Active Workspace
             </h2>
-            <span className="text-xs text-zinc-500 font-mono">Slug: {currentOrg?.slug}</span>
+            {currentOrg && <span className="text-xs text-zinc-500 font-mono">Slug: {currentOrg.slug}</span>}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-            <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-3.5">
-              <span className="text-zinc-500">Workspace Name</span>
-              <p className="font-bold text-white mt-1">{currentOrg?.name || 'Acme Engineering'}</p>
+          {currentOrg ? (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+              <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-3.5">
+                <span className="text-zinc-500">Workspace Name</span>
+                <p className="font-bold text-white mt-1">{currentOrg.name}</p>
+              </div>
+              <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-3.5">
+                <span className="text-zinc-500">Assigned Role</span>
+                <p className="font-bold text-emerald-400 mt-1">{currentRole || 'MEMBER'}</p>
+              </div>
+              <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-3.5">
+                <span className="text-zinc-500">Workspace ID</span>
+                <p className="font-mono text-zinc-300 mt-1 truncate">{currentOrg.id}</p>
+              </div>
             </div>
-            <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-3.5">
-              <span className="text-zinc-500">Assigned Role</span>
-              <p className="font-bold text-emerald-400 mt-1">{currentRole || 'OWNER'}</p>
+          ) : (
+            <div className="text-xs text-zinc-500 py-4">
+              No active workspace. Create or select an organization from the dashboard to manage workspace settings.
             </div>
-            <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-3.5">
-              <span className="text-zinc-500">Workspace ID</span>
-              <p className="font-mono text-zinc-300 mt-1 truncate">{currentOrg?.id}</p>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Section 3: Engineering Integrations Status */}

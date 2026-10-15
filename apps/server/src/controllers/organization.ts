@@ -187,7 +187,7 @@ export async function getOrganizationByIdHandler(
 
     // 4. Verify user is a member of the organization (403 if not a member)
     const isMember = organization.members.some(
-      (member) => member.user.id === req.user!.userId
+      (member) => member.userId === req.user!.userId || member.user.id === req.user!.userId
     );
 
     if (!isMember) {
@@ -198,10 +198,28 @@ export async function getOrganizationByIdHandler(
       return;
     }
 
+    // Explicitly format member mapping to ensure reliable userId field
+    const formattedMembers = organization.members.map((member) => ({
+      id: member.id,
+      userId: member.userId,
+      organizationId: member.organizationId,
+      role: member.role,
+      createdAt: member.createdAt,
+      user: {
+        id: member.user.id,
+        name: member.user.name,
+        email: member.user.email,
+        avatar: member.user.avatar,
+      },
+    }));
+
     // 5. Return HTTP 200 with organization details
     res.status(200).json({
       success: true,
-      data: organization,
+      data: {
+        ...organization,
+        members: formattedMembers,
+      },
     });
   } catch (error) {
     console.error('Get organization details error:', error);

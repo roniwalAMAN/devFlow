@@ -268,9 +268,9 @@ Now that your Vercel URL is known:
 1. Return to the Render Dashboard for `devflow-api`.
 2. Under **Environment**, update `CLIENT_URL` with your actual Vercel domain:
    ```
-   CLIENT_URL=https://devflow.vercel.app
+   CLIENT_URL=https://dev-flow-jet-nine.vercel.app
    ```
-   *(If you use a custom domain, include both: `https://devflow.vercel.app,https://yourdomain.com`)*.
+   *(If you use multiple domains, comma-separate them: `https://dev-flow-jet-nine.vercel.app,https://yourdomain.com` without trailing slashes)*.
 3. Save changes so the backend restarts with the updated CORS allowlist.
 
 ---

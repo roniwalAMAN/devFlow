@@ -18,14 +18,27 @@ import aiRoutes from './routes/ai';
  */
 
 /**
- * Resolve allowed origins from CLIENT_URL (supports comma-separated list) plus localhost defaults
+ * Normalize an origin URL by stripping surrounding quotes, whitespace, and trailing slashes
+ */
+export function normalizeOrigin(origin: string): string {
+  return origin.trim().replace(/^["']|["']$/g, '').replace(/\/+$/, '');
+}
+
+/**
+ * Resolve allowed origins from CLIENT_URL (supports comma-separated list) plus defaults
  */
 export function getAllowedOrigins(): string[] {
-  const envOrigins = (process.env.CLIENT_URL || 'http://localhost:3000')
+  const envOrigins = (process.env.CLIENT_URL || '')
     .split(',')
-    .map((o) => o.trim())
+    .map(normalizeOrigin)
     .filter(Boolean);
-  const defaults = ['http://localhost:3000', 'http://127.0.0.1:3000'];
+
+  const defaults = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'https://dev-flow-jet-nine.vercel.app',
+  ];
+
   return Array.from(new Set([...envOrigins, ...defaults]));
 }
 
@@ -49,22 +62,37 @@ export function createApp(): Express {
   });
 
   // 3. CORS Configuration
-  const allowedOrigins = getAllowedOrigins();
-  app.use(
-    cors({
-      origin: (origin, callback) => {
-        // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
-        if (!origin) return callback(null, true);
-        if (allowedOrigins.includes(origin)) {
-          return callback(null, true);
-        }
-        return callback(new Error(`CORS origin not allowed: ${origin}`));
-      },
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'x-refresh-token'],
-    })
-  );
+  const corsOptions: cors.CorsOptions = {
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. mobile apps, curl, server-to-server, Render health checks)
+      if (!origin) return callback(null, true);
+
+      const allowedOrigins = getAllowedOrigins();
+      const normalizedOrigin = normalizeOrigin(origin);
+
+      if (allowedOrigins.includes(normalizedOrigin)) {
+        return callback(null, true);
+      }
+
+      return callback(null, false);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'x-refresh-token',
+      'X-Requested-With',
+      'Accept',
+      'Origin',
+    ],
+    exposedHeaders: ['Content-Type', 'Authorization', 'x-refresh-token'],
+    maxAge: 86400,
+    optionsSuccessStatus: 204,
+  };
+
+  app.use(cors(corsOptions));
+  app.options('*', cors(corsOptions));
 
   // 4. Request Body Parsing
   app.use(express.json());

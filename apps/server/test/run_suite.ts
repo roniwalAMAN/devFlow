@@ -22,7 +22,7 @@ dotenv.config({ path: path.resolve(process.cwd(), '../../.env.local'), override:
 
 import { createServer } from 'http';
 import { prisma, MemberRole, TaskStatus, TaskPriority } from '@devflow/database';
-import { createApp } from '../src/app';
+import { createApp, getAllowedOrigins, normalizeOrigin } from '../src/app';
 import { initializeSocket, closeSocket } from '../src/socket/socket';
 import { encryptToken, decryptToken } from '../src/utils/crypto';
 import { sanitizeMetadata } from '../src/services/activity';
@@ -118,6 +118,77 @@ async function runTests() {
 
     const notFoundRes = await fetch(`${baseUrl}/api/non-existent-endpoint`);
     assert(notFoundRes.status === 404, 'Unknown API route correctly returned 404 Not Found');
+
+    // -------------------------------------------------------------
+    // SECTION 1B: CORS Configuration, Allowed Origins & Preflight Handling
+    // -------------------------------------------------------------
+    console.log('\n▶ [Section 1B] CORS Configuration, Allowed Origins & Preflight Handling');
+
+    // 1. Origin normalization unit assertions
+    assert(normalizeOrigin('https://dev-flow-jet-nine.vercel.app/') === 'https://dev-flow-jet-nine.vercel.app', 'normalizeOrigin strips trailing slash');
+    assert(normalizeOrigin('"https://dev-flow-jet-nine.vercel.app/"') === 'https://dev-flow-jet-nine.vercel.app', 'normalizeOrigin strips surrounding quotes and trailing slash');
+    assert(normalizeOrigin('  https://dev-flow-jet-nine.vercel.app  ') === 'https://dev-flow-jet-nine.vercel.app', 'normalizeOrigin trims whitespace');
+
+    // 2. getAllowedOrigins includes production origin and defaults
+    const currentOrigins = getAllowedOrigins();
+    assert(currentOrigins.includes('https://dev-flow-jet-nine.vercel.app'), 'getAllowedOrigins contains production frontend: https://dev-flow-jet-nine.vercel.app');
+    assert(currentOrigins.includes('http://localhost:3000'), 'getAllowedOrigins contains localhost:3000');
+    assert(!currentOrigins.some((o) => o.endsWith('/')), 'No allowed origin contains a trailing slash');
+
+    // 3. Preflight OPTIONS request from production origin
+    const prodOrigin = 'https://dev-flow-jet-nine.vercel.app';
+    const preflightRes = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'OPTIONS',
+      headers: {
+        'Origin': prodOrigin,
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'Content-Type,Authorization',
+      },
+    });
+
+    assert(preflightRes.status === 204, 'Preflight OPTIONS returned 204 No Content');
+    assert(preflightRes.headers.get('access-control-allow-origin') === prodOrigin, `Preflight granted Access-Control-Allow-Origin: ${prodOrigin}`);
+    assert(preflightRes.headers.get('access-control-allow-credentials') === 'true', 'Preflight returned Access-Control-Allow-Credentials: true');
+    assert(preflightRes.headers.get('access-control-allow-origin') !== '*', 'CORS does NOT use wildcard origin with credentials');
+    const allowMethods = preflightRes.headers.get('access-control-allow-methods') || '';
+    assert(allowMethods.includes('POST') && allowMethods.includes('OPTIONS'), 'Preflight methods include POST and OPTIONS');
+    const allowHeaders = preflightRes.headers.get('access-control-allow-headers') || '';
+    assert(allowHeaders.toLowerCase().includes('content-type'), 'Preflight headers include Content-Type');
+    assert(preflightRes.headers.get('access-control-max-age') === '86400', 'Preflight includes 24h caching header (max-age: 86400)');
+
+    // 4. Preflight OPTIONS with trailing slash in client origin header
+    const preflightSlashRes = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'OPTIONS',
+      headers: {
+        'Origin': `${prodOrigin}/`,
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'Content-Type',
+      },
+    });
+    assert(preflightSlashRes.status === 204, 'Preflight with trailing slash in client origin returned 204');
+    const slashOriginHeader = preflightSlashRes.headers.get('access-control-allow-origin');
+    assert(slashOriginHeader === `${prodOrigin}/` || slashOriginHeader === prodOrigin, 'Preflight with trailing slash correctly allowed origin');
+
+    // 5. Unauthorized origin preflight rejection
+    const unauthOrigin = 'https://unauthorized-malicious-site.com';
+    const unauthPreflight = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'OPTIONS',
+      headers: {
+        'Origin': unauthOrigin,
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'Content-Type',
+      },
+    });
+    assert(unauthPreflight.headers.get('access-control-allow-origin') === null, 'Unauthorized origin is NOT granted Access-Control-Allow-Origin header');
+
+    // 6. Actual request with Origin header
+    const actualCorsRes = await fetch(`${baseUrl}/api/health`, {
+      headers: {
+        'Origin': prodOrigin,
+      },
+    });
+    assert(actualCorsRes.headers.get('access-control-allow-origin') === prodOrigin, `Actual request granted Access-Control-Allow-Origin: ${prodOrigin}`);
+    assert(actualCorsRes.headers.get('access-control-allow-credentials') === 'true', 'Actual request returned Access-Control-Allow-Credentials: true');
 
     // -------------------------------------------------------------
     // SECTION 2: Authentication, Password Hashing & JWT Lifecycle

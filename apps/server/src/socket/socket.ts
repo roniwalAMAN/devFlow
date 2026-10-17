@@ -14,7 +14,7 @@ import {
 import { findProjectByIdAndOrg } from '../services/project';
 import { emitPresenceOnline, emitPresenceOffline } from './socketEvents';
 
-import { getAllowedOrigins } from '../app';
+import { getAllowedOrigins, normalizeOrigin } from '../app';
 
 let ioInstance: DevFlowSocketServer | null = null;
 
@@ -48,11 +48,17 @@ export async function getOnlineUserIdsInOrganization(
  * Initialize Socket.IO server attached to the shared HTTP server
  */
 export function initializeSocket(httpServer: HTTPServer): DevFlowSocketServer {
-  const allowedOrigins = getAllowedOrigins();
-
   const io: DevFlowSocketServer = new SocketIOServer(httpServer, {
     cors: {
-      origin: allowedOrigins,
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        const allowedOrigins = getAllowedOrigins();
+        const normalized = normalizeOrigin(origin);
+        if (allowedOrigins.includes(normalized)) {
+          return callback(null, true);
+        }
+        return callback(new Error(`Socket.IO CORS origin not allowed: ${origin}`));
+      },
       credentials: true,
     },
   });

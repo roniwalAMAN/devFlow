@@ -55,6 +55,27 @@ async function runSmokeTests() {
     const fullHealthRes = await fetch(`${TARGET_URL}/api/health/full`);
     assert(fullHealthRes.status === 200, 'GET /api/health/full confirmed composite health status');
 
+    // CORS & Preflight Verification
+    console.log('\n▶ [CORS] Production Origin Preflight & Allowlist Verification');
+    const testOrigin = process.env.CLIENT_ORIGIN || 'https://dev-flow-jet-nine.vercel.app';
+    const preflightRes = await fetch(`${TARGET_URL}/api/auth/login`, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: testOrigin,
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'Content-Type,Authorization',
+      },
+    });
+    assert(preflightRes.status === 204, `Preflight OPTIONS returned 204 for origin ${testOrigin}`);
+    assert(
+      preflightRes.headers.get('access-control-allow-origin') === testOrigin,
+      `Preflight returned Access-Control-Allow-Origin: ${testOrigin}`
+    );
+    assert(
+      preflightRes.headers.get('access-control-allow-credentials') === 'true',
+      'Preflight returned Access-Control-Allow-Credentials: true'
+    );
+
     // 2. Registration & Login
     console.log('\n▶ [2/12] User Registration & Authentication');
     const regRes = await fetch(`${TARGET_URL}/api/auth/register`, {

@@ -23,7 +23,7 @@ import Link from 'next/link';
 export default function OrganizationDetailsPage() {
   const params = useParams();
   const router = useRouter();
-  const { user, currentRole, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { success, error } = useToast();
 
   const organizationId = (params?.organizationId as string) || '';
@@ -39,7 +39,12 @@ export default function OrganizationDetailsPage() {
   const [inviteRole, setInviteRole] = useState('DEVELOPER');
   const [isSendingInvite, setIsSendingInvite] = useState(false);
 
-  const canManageMembers = currentRole === 'OWNER' || currentRole === 'ADMIN';
+  const organizationRole =
+    org && user
+      ? org.members?.find((member: any) => member.userId === user.id)?.role ||
+        (org.ownerId === user.id ? 'OWNER' : null)
+      : null;
+  const canManageMembers = organizationRole === 'OWNER' || organizationRole === 'ADMIN';
 
   const loadOrgDetails = useCallback(async () => {
     if (!organizationId) return;
@@ -210,7 +215,7 @@ export default function OrganizationDetailsPage() {
               </div>
               <div>
                 <span className="text-zinc-500">Your Permissions</span>
-                <p className="font-bold text-emerald-400 mt-0.5">{currentRole || 'MEMBER'}</p>
+                <p className="font-bold text-emerald-400 mt-0.5">{organizationRole || 'MEMBER'}</p>
               </div>
               <div>
                 <span className="text-zinc-500">Active Members</span>

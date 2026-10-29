@@ -48,6 +48,7 @@ async function runSmokeTests() {
     const dbRes = await fetch(`${TARGET_URL}/api/health/db`);
     const dbJson = await dbRes.json();
     assert(dbRes.status === 200 && dbJson.success === true, 'GET /api/health/db confirmed healthy PostgreSQL connection');
+    assert(dbJson.status !== 'unmigrated', 'GET /api/health/db confirmed schema is migrated and tables exist');
 
     const redisRes = await fetch(`${TARGET_URL}/api/health/redis`);
     assert([200, 503].includes(redisRes.status), 'GET /api/health/redis responded with graceful status');

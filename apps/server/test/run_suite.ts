@@ -23,6 +23,7 @@ dotenv.config({ path: path.resolve(process.cwd(), '../../.env.local'), override:
 import { createServer } from 'http';
 import { prisma, MemberRole, TaskStatus, TaskPriority } from '@devflow/database';
 import { createApp, getAllowedOrigins, normalizeOrigin } from '../src/app';
+import { getDatabaseHealth } from '../src/services/db';
 import { initializeSocket, closeSocket } from '../src/socket/socket';
 import { encryptToken, decryptToken } from '../src/utils/crypto';
 import { sanitizeMetadata } from '../src/services/activity';
@@ -108,6 +109,10 @@ async function runTests() {
     const dbHealthRes = await fetch(`${baseUrl}/api/health/db`);
     const dbHealthJson = await dbHealthRes.json();
     assert(dbHealthRes.status === 200 && dbHealthJson.service === 'database', 'GET /api/health/db confirmed PostgreSQL connection');
+    assert(dbHealthJson.message?.includes('migrated'), 'GET /api/health/db verified database schema is migrated');
+
+    const dbHealthDirect = await getDatabaseHealth();
+    assert(dbHealthDirect.connected && dbHealthDirect.migrated, 'getDatabaseHealth() confirmed connected and migrated schema');
 
     const redisHealthRes = await fetch(`${baseUrl}/api/health/redis`);
     assert([200, 503].includes(redisHealthRes.status), 'GET /api/health/redis responded with valid status');

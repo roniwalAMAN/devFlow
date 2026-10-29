@@ -68,6 +68,11 @@ export async function register(req: Request, res: Response): Promise<void> {
       data: formatUserResponse(user),
     });
   } catch (error) {
+    if ((error as any)?.code === 'P2021' || (error as any)?.code === 'P2010') {
+      console.error(
+        `[Auth Error] Database table missing (${(error as any).code}). Please run migrations: "pnpm prisma:migrate"`
+      );
+    }
     console.error('Registration error:', error);
     res.status(500).json({
       success: false,
@@ -142,6 +147,11 @@ export async function login(req: Request, res: Response): Promise<void> {
       },
     });
   } catch (error) {
+    if ((error as any)?.code === 'P2021' || (error as any)?.code === 'P2010') {
+      console.error(
+        `[Auth Error] Database table missing (${(error as any).code}). Please run migrations: "pnpm prisma:migrate"`
+      );
+    }
     console.error('Login error:', error);
     res.status(500).json({
       success: false,

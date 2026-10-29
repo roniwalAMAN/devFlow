@@ -4,7 +4,7 @@
 
 import express, { type Express } from 'express';
 import cors from 'cors';
-import { checkDatabaseConnection } from './services/db';
+import { checkDatabaseConnection, getDatabaseHealth } from './services/db';
 import { isRedisAvailable } from './services/redis';
 import authRoutes from './routes/auth';
 import organizationRoutes from './routes/organization';
@@ -118,23 +118,35 @@ export function createApp(): Express {
   // Database health check endpoint
   app.get('/api/health/db', async (_req, res) => {
     try {
-      const isConnected = await checkDatabaseConnection();
+      const dbHealth = await getDatabaseHealth();
 
-      if (isConnected) {
-        res.status(200).json({
-          success: true,
-          status: 'ok',
-          service: 'database',
-          message: 'Database connection is healthy',
-        });
-      } else {
-        res.status(500).json({
+      if (!dbHealth.connected) {
+        res.status(503).json({
           success: false,
           status: 'error',
           service: 'database',
           message: 'Database connection failed',
         });
+        return;
       }
+
+      if (!dbHealth.migrated) {
+        res.status(503).json({
+          success: false,
+          status: 'unmigrated',
+          service: 'database',
+          message:
+            `Database connection is healthy, but required tables are missing: ${dbHealth.missingTables.join(', ')}. Please run database migrations (pnpm prisma:migrate).`,
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        status: 'ok',
+        service: 'database',
+        message: 'Database connection is healthy and schema is migrated',
+      });
     } catch {
       res.status(500).json({
         success: false,
@@ -220,4 +232,3 @@ export function createApp(): Express {
 
   return app;
 }
-

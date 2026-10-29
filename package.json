@@ -17,7 +17,7 @@
     "type-check": "pnpm -r type-check",
     "prisma:generate": "pnpm --filter @devflow/database prisma:generate",
     "prisma:validate": "prisma validate --schema packages/database/prisma/schema.prisma",
-    "prisma:migrate": "pnpm --filter @devflow/database prisma:migrate"
+    "prisma:migrate": "prisma migrate deploy --schema packages/database/prisma/schema.prisma"
   },
   "devDependencies": {
     "prisma": "5.22.0"

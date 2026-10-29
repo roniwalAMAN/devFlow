@@ -193,20 +193,38 @@ If you scale the Render Web Service to multiple instances, each web instance wou
 ### Non-Destructive Migration Command
 The safe, non-destructive deployment migration command is:
 ```bash
-pnpm --filter @devflow/database prisma:migrate
+pnpm prisma:migrate
 ```
-*(Under the hood, this executes `prisma migrate deploy`, which inspects pending migration files and applies only unapplied migrations safely in sequence).*
+*(Under the hood, this executes `prisma migrate deploy --schema packages/database/prisma/schema.prisma`, which inspects pending migration files and applies only unapplied migrations safely in sequence).*
 
-### How to Execute Migrations:
-Option 1: **Via Render Shell**:
+### How to Apply Production Migrations:
+
+#### Option 1: Automated via Render Pre-Deploy Command (Recommended)
+1. In the Render Dashboard for your web service (`devflow-api`), go to **Settings**.
+2. Scroll to the **Pre-Deploy Command** field.
+3. Enter:
+   ```bash
+   pnpm prisma:migrate
+   ```
+4. Save Changes. Render will now automatically run pending migrations before every deployment and halt if a migration fails.
+
+#### Option 2: Automated via Render Start Command
+Alternatively, update the **Start Command** in Render Web Service settings to run migrations before starting Node:
+```bash
+pnpm prisma:migrate && pnpm --filter @devflow/server start
+```
+
+#### Option 3: Manual via Render Web Service Shell
 1. In the Render Dashboard for `devflow-api`, navigate to the **Shell** tab.
 2. Run:
    ```bash
-   pnpm --filter @devflow/database prisma:migrate
+   pnpm prisma:migrate
    ```
-Option 2: **Via Local Machine targeting the Production Database**:
+3. Once completed, your PostgreSQL database will contain all 13 core tables, and registration/login will immediately work.
+
+#### Option 4: Via Local Machine targeting Production Database
 ```bash
-DATABASE_URL="postgresql://user:pass@host:5432/db?sslmode=require" pnpm --filter @devflow/database prisma:migrate
+DATABASE_URL="postgresql://<USER>:<PASSWORD>@<HOST>:5432/<DB>?sslmode=require" pnpm prisma:migrate
 ```
 
 ---
